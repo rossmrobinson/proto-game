@@ -314,7 +314,21 @@ func _update_anchor(anchor: StaticBody3D, hold_dist: float, delta: float) -> voi
 	var camera: Camera3D = _player.get_active_camera()
 	if camera == null:
 		return
-	var aim_pos: Vector3 = camera.global_position + (-camera.global_basis.z) * hold_dist
+
+	var aim_pos: Vector3
+
+	# In detached-cursor mode, guide held objects toward the crosshair position
+	if _targeting != null and _targeting.detached_cursor:
+		var ray: Array = _targeting.get_aim_ray()
+		if ray.size() == 2:
+			var ray_origin: Vector3 = ray[0] as Vector3
+			var ray_dir: Vector3 = ray[1] as Vector3
+			aim_pos = ray_origin + ray_dir * hold_dist
+		else:
+			aim_pos = camera.global_position + (-camera.global_basis.z) * hold_dist
+	else:
+		aim_pos = camera.global_position + (-camera.global_basis.z) * hold_dist
+
 	anchor.global_position = anchor.global_position.lerp(aim_pos, grab_move_speed * delta)
 
 

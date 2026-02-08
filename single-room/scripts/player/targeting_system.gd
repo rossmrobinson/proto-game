@@ -28,6 +28,11 @@ var current_target: BodyPart = null
 ## World-space hit point of the last successful target acquisition.
 var target_hit_point: Vector3 = Vector3.ZERO
 
+## When true the camera view is frozen and the crosshair moves freely.
+var detached_cursor: bool = false
+## Screen-space offset from viewport center (pixels). Only used in detached mode.
+var crosshair_offset: Vector2 = Vector2.ZERO
+
 @onready var _player: PlayerController = get_parent() as PlayerController
 var _crosshair_layer: CanvasLayer = null
 var _crosshair_draw: Control = null
@@ -38,6 +43,11 @@ var _original_material: Material = null
 func _ready() -> void:
 	if show_crosshair:
 		_create_crosshair()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed(&"detach_cursor"):
+		toggle_detached_cursor()
 
 
 func _physics_process(_delta: float) -> void:
@@ -61,6 +71,42 @@ func toggle_highlight() -> void:
 		_clear_highlight()
 
 
+## Toggle detached-cursor mode (TAB). Camera freezes, crosshair moves freely.
+func toggle_detached_cursor() -> void:
+	detached_cursor = not detached_cursor
+	if detached_cursor:
+		crosshair_offset = Vector2.ZERO
+		# Force crosshair visible in detached mode
+		if not show_crosshair:
+			show_crosshair = true
+			if _crosshair_layer == null:
+				_create_crosshair()
+	else:
+		crosshair_offset = Vector2.ZERO
+
+
+## Called by PlayerController when in detached mode. Moves the crosshair.
+func move_crosshair(relative: Vector2) -> void:
+	if not detached_cursor:
+		return
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	# Clamp so crosshair stays on screen (with a small margin)
+	var half: Vector2 = vp_size * 0.48
+	crosshair_offset = (crosshair_offset + relative).clamp(-half, half)
+
+
+## Returns the world-space aim origin and direction from the current crosshair position.
+func get_aim_ray() -> Array:
+	var camera: Camera3D = _player.get_active_camera()
+	if camera == null:
+		return []
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	var screen_point: Vector2 = vp_size / 2.0 + crosshair_offset
+	var origin: Vector3 = camera.project_ray_origin(screen_point)
+	var direction: Vector3 = camera.project_ray_normal(screen_point)
+	return [origin, direction]
+
+
 # ── Targeting Logic ──────────────────────────────────────────────────────────
 
 func _update_target() -> void:
@@ -68,12 +114,22 @@ func _update_target() -> void:
 	if camera == null:
 		return
 
-	var origin: Vector3 = camera.global_position
-	var direction: Vector3 = -camera.global_basis.z
+	# Use offset-aware aim ray when in detached mode
+	var origin: Vector3
+	var direction: Vector3
+	if detached_cursor:
+		var ray: Array = get_aim_ray()
+		if ray.is_empty():
+			return
+		origin = ray[0] as Vector3
+		direction = ray[1] as Vector3
+	else:
+		origin = camera.global_position
+		direction = -camera.global_basis.z
 	var best: BodyPart = null
 	var best_point: Vector3 = Vector3.ZERO
 
-	# Primary: direct physics raycast from screen center
+	# Primary: direct physics raycast from crosshair position
 	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
 	var ray_end: Vector3 = origin + direction * max_distance
 	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
@@ -213,7 +269,7 @@ class _CrosshairDraw extends Control:
 	func _draw() -> void:
 		if targeting == null or not targeting.show_crosshair:
 			return
-		var center: Vector2 = size / 2.0
+		var center: Vector2 = size / 2.0 + targeting.crosshair_offset
 		var gap: float = targeting.crosshair_gap
 		var arm: float = targeting.crosshair_size
 		var thick: float = targeting.crosshair_thickness
@@ -222,6 +278,11 @@ class _CrosshairDraw extends Control:
 		# Tint crosshair when a target is acquired
 		if targeting.current_target != null:
 			col = Color(0.3, 1.0, 0.3, col.a)
+
+		# Tint blue-ish when in detached mode
+		if targeting.detached_cursor:
+			if targeting.current_target == null:
+				col = Color(0.4, 0.7, 1.0, col.a)
 
 		# Four lines forming a gapped cross
 		draw_line(center + Vector2(-arm, 0), center + Vector2(-gap, 0), col, thick)

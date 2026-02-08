@@ -1,0 +1,11 @@
+# MakeHuman Material: New Bush
+name newbush
+shader humanhair
+
+diffuseColor 1.0 1.0 1.0
+ambientColor 1.0 1.0 1.0
+specularColor 0.05 0.05 0.05
+shininess 30
+opacity 1.0
+
+diffuseTexture newbush.png

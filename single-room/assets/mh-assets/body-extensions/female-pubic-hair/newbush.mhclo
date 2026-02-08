@@ -1,0 +1,8 @@
+# MakeHuman Hair Asset: New Bush
+name "New Bush"
+uuid "newbush"
+version 1.0
+
+obj_file newbush.obj
+material newbush.mhmat
+

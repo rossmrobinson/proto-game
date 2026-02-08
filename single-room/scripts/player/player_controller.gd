@@ -29,17 +29,27 @@ extends CharacterBody3D
 # ── State ────────────────────────────────────────────────────────────────────
 var is_first_person: bool = true
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+var _targeting: TargetingSystem = null
 
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_apply_camera_mode()
+	# Cache sibling TargetingSystem for detached-cursor routing
+	for child: Node in get_children():
+		if child is TargetingSystem:
+			_targeting = child as TargetingSystem
+			break
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	# Mouse look
+	# Mouse look — route to crosshair when detached, else rotate camera
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		_handle_mouse_look(event as InputEventMouseMotion)
+		var motion: InputEventMouseMotion = event as InputEventMouseMotion
+		if _targeting != null and _targeting.detached_cursor:
+			_targeting.move_crosshair(motion.relative)
+		else:
+			_handle_mouse_look(motion)
 	
 	# Camera toggle (V key)
 	if event.is_action_pressed(&"toggle_camera"):
