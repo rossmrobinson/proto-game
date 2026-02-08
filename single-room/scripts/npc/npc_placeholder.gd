@@ -6,8 +6,11 @@ extends Node3D
 @export var npc_name: String = "TestNPC"
 @export var body_height: float = 1.75
 @export var body_color: Color = Color(0.85, 0.72, 0.6, 1.0)
+## Model name inside the .blend file ("Ada", "Vero", "Player1") — leave empty for placeholder mesh.
+@export var model_name: String = ""
 
 @onready var ragdoll: HumanoidRagdollBuilder = $HumanoidRagdoll
+var skeleton_binding: SkeletonBinding = null
 var nerve_system: NerveSystem = null
 var character_profile: CharacterProfile = null
 var body_language: BodyLanguageSystem = null
@@ -76,3 +79,79 @@ func _on_ragdoll_built() -> void:
 			if child.has_method(&"receive_touch"):
 				part._nerve_system = child
 				break
+
+	# If a model name is set, load the skinned mesh and bind skeleton
+	if model_name != "":
+		_load_model()
+
+
+## Load the skinned mesh from the .blend import and bind its skeleton to the ragdoll.
+func _load_model() -> void:
+	# Godot imports each object in a .blend as a child of the root scene.
+	# The imported scene path follows: res://assets/models/<file>.blend
+	var blend_path: String = "res://assets/models/room1-models.blend"
+	if not ResourceLoader.exists(blend_path):
+		push_warning("[NPC] Model file not found: %s — keeping placeholder meshes" % blend_path)
+		return
+
+	var scene_res: PackedScene = load(blend_path) as PackedScene
+	if scene_res == null:
+		push_warning("[NPC] Failed to load model scene: %s" % blend_path)
+		return
+
+	var scene_root: Node3D = scene_res.instantiate() as Node3D
+	if scene_root == null:
+		push_warning("[NPC] Model scene instantiation failed")
+		return
+
+	# Find the named armature/mesh matching our model_name
+	var armature: Node = _find_armature(scene_root, model_name)
+	if armature == null:
+		push_warning("[NPC] Armature '%s' not found in %s" % [model_name, blend_path])
+		scene_root.queue_free()
+		return
+
+	# Reparent just the armature node into this NPC
+	armature.get_parent().remove_child(armature)
+	scene_root.queue_free()
+	add_child(armature)
+
+	# Find the Skeleton3D within the armature subtree
+	var skel: Skeleton3D = _find_skeleton(armature)
+	if skel == null:
+		push_warning("[NPC] No Skeleton3D found under armature '%s'" % model_name)
+		return
+
+	# Create and wire up the skeleton binding
+	skeleton_binding = SkeletonBinding.new()
+	skeleton_binding.name = "SkeletonBinding"
+	add_child(skeleton_binding)
+	skeleton_binding.bind(skel, ragdoll)
+
+	print("[NPC] %s model loaded — %d bones bound" % [
+		model_name, skeleton_binding._bone_to_part.size()])
+
+
+## Recursively search for a node whose name contains the model name (armature root).
+func _find_armature(root: Node, target_name: String) -> Node:
+	var target_lower: String = target_name.to_lower()
+	for child: Node in root.get_children():
+		if child.name.to_lower().contains(target_lower):
+			return child
+	# Deeper search
+	for child: Node in root.get_children():
+		var found: Node = _find_armature(child, target_name)
+		if found != null:
+			return found
+	return null
+
+
+## Find the first Skeleton3D in a subtree.
+func _find_skeleton(root: Node) -> Skeleton3D:
+	if root is Skeleton3D:
+		return root as Skeleton3D
+	for child: Node in root.get_children():
+		var found: Skeleton3D = _find_skeleton(child)
+		if found != null:
+			return found
+	return null
