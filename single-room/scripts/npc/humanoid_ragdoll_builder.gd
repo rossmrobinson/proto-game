@@ -4,13 +4,14 @@ extends Node3D
 ## correct joint limits. Each segment is a BodyPart (RigidBody3D) connected
 ## by Generic6DOFJoint3D nodes.
 ##
-## Segments (~33-35 depending on body_type):
+## Segments (~55-60 depending on body_type):
 ##   Torso:    pelvis, spine_lower, spine_upper, chest, neck, head
-##   Chest:    L/R breast (soft-jointed)
+##   Chest:    L/R breast_mass + breast_nipple
 ##   Pelvis:   L/R glute, groin segments (body_type dependent)
+##   Genitals: penis_base/mid/tip OR labia_l/r + clitoris, scrotum_l/r
 ##   Passages: anal canal chain, vaginal canal chain (FEMALE/ANDROGYNOUS)
 ##   Arms:     L/R clavicle, upper_arm, forearm, hand
-##   Hands:    L/R thumb, fingers (4 grouped)
+##   Hands:    L/R thumb(3), index(3), middle(3), ring(3), pinky(3) = 30 total
 ##   Legs:     L/R upper_leg, lower_leg, foot, toes
 ##
 ## Attach this to an empty Node3D. It builds everything in _ready().
@@ -66,17 +67,38 @@ const HIP_WIDTH_FRAC: float = 0.10
 const BREAST_RADIUS_FRAC: float = 0.035
 const BREAST_OFFSET_X_FRAC: float = 0.065
 const BREAST_OFFSET_Z_FRAC: float = 0.06
+const NIPPLE_RADIUS_FRAC: float = 0.008
 const GLUTE_RADIUS_FRAC: float = 0.055
 const GLUTE_OFFSET_X_FRAC: float = 0.06
 const GLUTE_OFFSET_Z_FRAC: float = -0.06
-const PENIS_LENGTH_FRAC: float = 0.045
+const PENIS_SEGMENT_LENGTH_FRAC: float = 0.015
 const PENIS_RADIUS_FRAC: float = 0.015
-const SCROTUM_RADIUS_FRAC: float = 0.025
+const SCROTUM_RADIUS_FRAC: float = 0.018
+const SCROTUM_OFFSET_X_FRAC: float = 0.012
+const LABIA_HEIGHT_FRAC: float = 0.025
+const LABIA_OFFSET_X_FRAC: float = 0.01
+const CLITORIS_RADIUS_FRAC: float = 0.006
 const VULVA_HEIGHT_FRAC: float = 0.025
 const PASSAGE_SEGMENT_RADIUS_FRAC: float = 0.010
 const PASSAGE_SEGMENT_LENGTH_FRAC: float = 0.022
 const PASSAGE_SEGMENTS_ANAL: int = 3
 const PASSAGE_SEGMENTS_VAGINAL: int = 4
+
+# Finger dimensions (fraction of body_height)
+const FINGER_RADIUS_FRAC: float = 0.006
+# Per-finger segment lengths [proximal, middle, distal] as fraction of body_height
+const THUMB_SEG_FRACS: PackedFloat64Array = [0.016, 0.018, 0.014]
+const INDEX_SEG_FRACS: PackedFloat64Array = [0.013, 0.012, 0.014]
+const MIDDLE_SEG_FRACS: PackedFloat64Array = [0.017, 0.014, 0.013]
+const RING_SEG_FRACS: PackedFloat64Array = [0.015, 0.013, 0.014]
+const PINKY_SEG_FRACS: PackedFloat64Array = [0.011, 0.008, 0.010]
+
+# Finger X offsets from hand centre (fraction of body_height), thumb is special
+const FINGER_X_OFFSETS: PackedFloat64Array = [0.0, 0.01, 0.0, -0.007, -0.018]
+# Finger Z offsets from hand front (fraction of body_height)
+const FINGER_Z_OFFSETS: PackedFloat64Array = [0.02, 0.0, -0.005, -0.012, -0.02]
+const FINGER_NAMES: PackedStringArray = ["thumb", "index", "middle", "ring", "pinky"]
+const FINGER_SEG_NAMES: PackedStringArray = ["01", "02", "03"]
 
 
 ## Part names that should be placed on the internal-only physics layer.
@@ -86,21 +108,105 @@ const INTERNAL_PARTS: PackedStringArray = [
 ]
 
 ## Soft-tissue parts placed on layer 5 (NPC_SoftTissue) instead of layer 3.
-## They still collide with everything external but can be masked separately for
-## fine-grained interaction (e.g. cloth draping, targeted grab filtering).
 const SOFT_TISSUE_PARTS: PackedStringArray = [
-	"left_breast", "right_breast",
+	"left_breast_mass", "right_breast_mass",
+	"left_breast_nipple", "right_breast_nipple",
 	"left_glute", "right_glute",
-	"penis", "scrotum", "vulva",
+	"penis_base", "penis_mid", "penis_tip",
+	"scrotum_left", "scrotum_right",
+	"labia_left", "labia_right", "clitoris",
 ]
+
+## Maps Blender bone names → our ragdoll part names for import/animation.
+const BONE_NAME_MAP: Dictionary = {
+	"Root": "pelvis",
+	"pelvis": "pelvis",
+	"spine_01": "spine_lower",
+	"spine_02": "spine_upper",
+	"spine_03": "chest",
+	"neck_01": "neck",
+	"head": "head",
+	"clavicle_l": "left_clavicle",
+	"clavicle_r": "right_clavicle",
+	"upperarm_l": "left_upper_arm",
+	"upperarm_r": "right_upper_arm",
+	"lowerarm_l": "left_forearm",
+	"lowerarm_r": "right_forearm",
+	"hand_l": "left_hand",
+	"hand_r": "right_hand",
+	"thumb_01_l": "left_thumb_01",
+	"thumb_02_l": "left_thumb_02",
+	"thumb_03_l": "left_thumb_03",
+	"thumb_01_r": "right_thumb_01",
+	"thumb_02_r": "right_thumb_02",
+	"thumb_03_r": "right_thumb_03",
+	"index_01_l": "left_index_01",
+	"index_02_l": "left_index_02",
+	"index_03_l": "left_index_03",
+	"index_01_r": "right_index_01",
+	"index_02_r": "right_index_02",
+	"index_03_r": "right_index_03",
+	"middle_01_l": "left_middle_01",
+	"middle_02_l": "left_middle_02",
+	"middle_03_l": "left_middle_03",
+	"middle_01_r": "right_middle_01",
+	"middle_02_r": "right_middle_02",
+	"middle_03_r": "right_middle_03",
+	"ring_01_l": "left_ring_01",
+	"ring_02_l": "left_ring_02",
+	"ring_03_l": "left_ring_03",
+	"ring_01_r": "right_ring_01",
+	"ring_02_r": "right_ring_02",
+	"ring_03_r": "right_ring_03",
+	"pinky_01_l": "left_pinky_01",
+	"pinky_02_l": "left_pinky_02",
+	"pinky_03_l": "left_pinky_03",
+	"pinky_01_r": "right_pinky_01",
+	"pinky_02_r": "right_pinky_02",
+	"pinky_03_r": "right_pinky_03",
+	"thigh_l": "left_upper_leg",
+	"thigh_r": "right_upper_leg",
+	"calf_l": "left_lower_leg",
+	"calf_r": "right_lower_leg",
+	"foot_l": "left_foot",
+	"foot_r": "right_foot",
+	"ball_l": "left_toes",
+	"ball_r": "right_toes",
+}
+
+## Reverse: ragdoll part name → Blender bone name.
+static var PART_TO_BONE_MAP: Dictionary = {}
+
+## Lookup helper arrays for finger construction (populated in _init_finger_fracs).
+var _finger_frac_table: Array = []
 
 
 func _ready() -> void:
+	_init_finger_fracs()
+	_init_reverse_bone_map()
 	_build_ragdoll()
 	_apply_collision_exclusions()
 	_assign_soft_tissue_layers()
 	_assign_internal_layers()
 	ragdoll_built.emit()
+
+
+func _init_finger_fracs() -> void:
+	_finger_frac_table = [
+		THUMB_SEG_FRACS,
+		INDEX_SEG_FRACS,
+		MIDDLE_SEG_FRACS,
+		RING_SEG_FRACS,
+		PINKY_SEG_FRACS,
+	]
+
+
+static func _init_reverse_bone_map() -> void:
+	if not PART_TO_BONE_MAP.is_empty():
+		return
+	for blender_name: String in BONE_NAME_MAP:
+		var our_name: String = BONE_NAME_MAP[blender_name] as String
+		PART_TO_BONE_MAP[our_name] = blender_name
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -168,24 +274,37 @@ func _build_ragdoll() -> void:
 		Vector3(0, neck.position.y + NECK_HEIGHT_FRAC * h * 0.5, 0),
 		Vector3(-40, -55, -25), Vector3(55, 55, 25))
 
-	# ── Breasts (both sides) ────────────────────────────────────────────
+	# ── Breasts (both sides — mass + nipple) ────────────────────────────
 	for side_sign: float in [-1.0, 1.0]:
 		var side: String = "left" if side_sign < 0 else "right"
 		var breast_x: float = side_sign * BREAST_OFFSET_X_FRAC * h
 		var breast_y: float = chest.position.y - CHEST_HEIGHT_FRAC * h * 0.1
 		var breast_z: float = BREAST_OFFSET_Z_FRAC * h
 
-		var breast: BodyPart = _create_part(
-			"%s_breast" % side, "%s Breast" % side.capitalize(),
+		var breast_mass: BodyPart = _create_part(
+			"%s_breast_mass" % side, "%s Breast" % side.capitalize(),
 			Vector3(breast_x, breast_y, breast_z),
 			_sphere_shape(BREAST_RADIUS_FRAC * h),
 			0.4 * mass_scale, 0.3)
 
 		# Soft spring joint for natural jiggle
-		_create_soft_joint(chest, breast,
+		_create_soft_joint(chest, breast_mass,
 			Vector3(breast_x, breast_y + BREAST_RADIUS_FRAC * h * 0.5, breast_z * 0.5),
 			Vector3(-15, -10, -15), Vector3(15, 10, 15),
 			8.0, 1.5)
+
+		# Nipple — small tip part on front of breast
+		var nipple_pos: Vector3 = Vector3(breast_x, breast_y, breast_z + BREAST_RADIUS_FRAC * h * 0.9)
+		var nipple: BodyPart = _create_part(
+			"%s_breast_nipple" % side, "%s Nipple" % side.capitalize(),
+			nipple_pos,
+			_sphere_shape(NIPPLE_RADIUS_FRAC * h),
+			0.02 * mass_scale, 0.15)
+
+		_create_soft_joint(breast_mass, nipple,
+			Vector3(breast_x, breast_y, breast_z + BREAST_RADIUS_FRAC * h * 0.5),
+			Vector3(-8, -8, -8), Vector3(8, 8, 8),
+			15.0, 3.0)
 
 	# ── Glutes (both sides) ─────────────────────────────────────────────
 	for side_sign: float in [-1.0, 1.0]:
@@ -211,44 +330,92 @@ func _build_ragdoll() -> void:
 	var groin_z: float = 0.04 * h  # Front of pelvis
 
 	if body_type == BodyType.MALE or body_type == BodyType.ANDROGYNOUS:
-		var penis: BodyPart = _create_part(
-			"penis", "Penis",
-			Vector3(0.0, groin_anchor_y - PENIS_LENGTH_FRAC * h * 0.5, groin_z),
-			_capsule_shape(PENIS_RADIUS_FRAC * h, PENIS_LENGTH_FRAC * h),
-			0.15 * mass_scale, 0.25)
+		# Penis — 3-segment articulated chain (base → mid → tip)
+		var seg_len: float = PENIS_SEGMENT_LENGTH_FRAC * h
+		var penis_base: BodyPart = _create_part(
+			"penis_base", "Penis Base",
+			Vector3(0.0, groin_anchor_y - seg_len * 0.5, groin_z),
+			_capsule_shape(PENIS_RADIUS_FRAC * h, seg_len),
+			0.06 * mass_scale, 0.25)
 
-		_create_soft_joint(pelvis, penis,
+		_create_soft_joint(pelvis, penis_base,
 			Vector3(0.0, groin_anchor_y, groin_z),
 			Vector3(-90, -45, -45), Vector3(45, 45, 45),
+			5.0, 1.2)
+
+		var penis_mid: BodyPart = _create_part(
+			"penis_mid", "Penis Mid",
+			Vector3(0.0, groin_anchor_y - seg_len * 1.5, groin_z),
+			_capsule_shape(PENIS_RADIUS_FRAC * h * 0.9, seg_len),
+			0.05 * mass_scale, 0.25)
+
+		_create_soft_joint(penis_base, penis_mid,
+			Vector3(0.0, groin_anchor_y - seg_len, groin_z),
+			Vector3(-40, -25, -25), Vector3(40, 25, 25),
 			4.0, 1.0)
 
-		var scrotum: BodyPart = _create_part(
-			"scrotum", "Scrotum",
-			Vector3(0.0, groin_anchor_y - PENIS_LENGTH_FRAC * h * 0.3, groin_z * 0.5),
-			_sphere_shape(SCROTUM_RADIUS_FRAC * h),
-			0.1 * mass_scale, 0.2)
+		var penis_tip: BodyPart = _create_part(
+			"penis_tip", "Penis Tip",
+			Vector3(0.0, groin_anchor_y - seg_len * 2.5, groin_z),
+			_capsule_shape(PENIS_RADIUS_FRAC * h * 0.8, seg_len),
+			0.04 * mass_scale, 0.2)
 
-		_create_soft_joint(pelvis, scrotum,
-			Vector3(0.0, groin_anchor_y - PENIS_LENGTH_FRAC * h * 0.1, groin_z * 0.4),
+		_create_soft_joint(penis_mid, penis_tip,
+			Vector3(0.0, groin_anchor_y - seg_len * 2.0, groin_z),
 			Vector3(-30, -20, -20), Vector3(30, 20, 20),
-			5.0, 1.5)
+			3.5, 0.8)
+
+		# Scrotum — independent left/right
+		for scr_sign: float in [-1.0, 1.0]:
+			var scr_side: String = "left" if scr_sign < 0 else "right"
+			var scr_x: float = scr_sign * SCROTUM_OFFSET_X_FRAC * h
+			var scr_y: float = groin_anchor_y - seg_len * 0.3
+
+			var scrotum: BodyPart = _create_part(
+				"scrotum_%s" % scr_side, "%s Scrotum" % scr_side.capitalize(),
+				Vector3(scr_x, scr_y, groin_z * 0.5),
+				_sphere_shape(SCROTUM_RADIUS_FRAC * h),
+				0.05 * mass_scale, 0.2)
+
+			_create_soft_joint(pelvis, scrotum,
+				Vector3(scr_x * 0.5, scr_y + SCROTUM_RADIUS_FRAC * h * 0.5, groin_z * 0.4),
+				Vector3(-30, -20, -20), Vector3(30, 20, 20),
+				5.0, 1.5)
 
 	if body_type == BodyType.FEMALE or body_type == BodyType.ANDROGYNOUS:
-		var vulva: BodyPart = _create_part(
-			"vulva", "Vulva",
-			Vector3(0.0, groin_anchor_y, groin_z * 0.8),
-			_box_shape(Vector3(0.03 * h, VULVA_HEIGHT_FRAC * h, 0.015 * h)),
-			0.05 * mass_scale, 0.2)
+		# Labia — left and right
+		for lab_sign: float in [-1.0, 1.0]:
+			var lab_side: String = "left" if lab_sign < 0 else "right"
+			var lab_x: float = lab_sign * LABIA_OFFSET_X_FRAC * h
 
-		_create_soft_joint(pelvis, vulva,
-			Vector3(0.0, groin_anchor_y + VULVA_HEIGHT_FRAC * h * 0.5, groin_z * 0.4),
-			Vector3(-5, -3, -3), Vector3(5, 3, 3),
-			15.0, 3.0)
+			var labia: BodyPart = _create_part(
+				"labia_%s" % lab_side, "%s Labia" % lab_side.capitalize(),
+				Vector3(lab_x, groin_anchor_y, groin_z * 0.8),
+				_box_shape(Vector3(0.008 * h, LABIA_HEIGHT_FRAC * h, 0.012 * h)),
+				0.02 * mass_scale, 0.15)
 
-		# Vaginal canal — chain of soft segments going inward/upward from vulva
-		_create_passage_chain("vaginal", vulva,
+			_create_soft_joint(pelvis, labia,
+				Vector3(lab_x * 0.5, groin_anchor_y + LABIA_HEIGHT_FRAC * h * 0.5, groin_z * 0.4),
+				Vector3(-5, -3, -3), Vector3(5, 3, 3),
+				15.0, 3.0)
+
+		# Clitoris — tiny sphere between labia
+		var clitoris: BodyPart = _create_part(
+			"clitoris", "Clitoris",
+			Vector3(0.0, groin_anchor_y + LABIA_HEIGHT_FRAC * h * 0.35, groin_z * 0.9),
+			_sphere_shape(CLITORIS_RADIUS_FRAC * h),
+			0.01 * mass_scale, 0.1)
+
+		_create_soft_joint(pelvis, clitoris,
+			Vector3(0.0, groin_anchor_y + LABIA_HEIGHT_FRAC * h * 0.4, groin_z * 0.5),
+			Vector3(-3, -3, -3), Vector3(3, 3, 3),
+			20.0, 4.0)
+
+		# Vaginal canal — chain of soft segments going inward/upward
+		# Anchor from the labia region
+		_create_passage_chain("vaginal", pelvis,
 			Vector3(0.0, groin_anchor_y, groin_z * 0.5),
-			Vector3(0.0, 0.3, -0.9).normalized(),  # Angled inward and slightly up
+			Vector3(0.0, 0.3, -0.9).normalized(),
 			PASSAGE_SEGMENTS_VAGINAL, h)
 
 	# ── Anal passage (all body types) ───────────────────────────────────
@@ -289,21 +456,69 @@ func _build_ragdoll() -> void:
 			_box_shape(Vector3(0.05 * h, HAND_FRAC * h, 0.03 * h)),
 			0.5 * mass_scale, 0.4)
 
-		# Thumb (1 segment)
-		var thumb: BodyPart = _create_part(
-			"%s_thumb" % side, "%s Thumb" % side.capitalize(),
-			Vector3(shoulder_x + side_sign * 0.03 * h,
-				hand.position.y + HAND_FRAC * h * 0.1,
-				0.02 * h),
-			_capsule_shape(0.01 * h, 0.03 * h),
-			0.1 * mass_scale, 0.3)
+		# ── Fully articulated fingers (5 × 3 phalanges per hand) ───────
+		var hand_base_y: float = hand.position.y - HAND_FRAC * h * 0.5
+		var finger_r: float = FINGER_RADIUS_FRAC * h
 
-		# Fingers grouped (1 segment for index+middle+ring+pinky)
-		var fingers: BodyPart = _create_part(
-			"%s_fingers" % side, "%s Fingers" % side.capitalize(),
-			Vector3(shoulder_x, hand.position.y - HAND_FRAC * h * 0.5 - 0.02 * h, 0.0),
-			_box_shape(Vector3(0.04 * h, 0.035 * h, 0.02 * h)),
-			0.2 * mass_scale, 0.3)
+		for f_idx: int in range(FINGER_NAMES.size()):
+			var f_name: String = FINGER_NAMES[f_idx]
+			var seg_lengths: Array = _finger_frac_table[f_idx]
+			var f_x_off: float = FINGER_X_OFFSETS[f_idx] * h * side_sign
+			var f_z_off: float = FINGER_Z_OFFSETS[f_idx] * h
+			var is_thumb: bool = (f_idx == 0)
+
+			# Anchor: where the finger attaches to the hand
+			var anchor_y: float = hand_base_y if not is_thumb else hand.position.y + HAND_FRAC * h * 0.1
+			var anchor_pos: Vector3 = Vector3(
+				shoulder_x + f_x_off,
+				anchor_y,
+				f_z_off)
+
+			var prev_part: BodyPart = hand
+			var joint_pos: Vector3 = anchor_pos
+
+			for seg_idx: int in range(FINGER_SEG_NAMES.size()):
+				var seg_name: String = FINGER_SEG_NAMES[seg_idx]
+				var seg_len: float = (seg_lengths[seg_idx] as float) * h
+				var part_name: String = "%s_%s_%s" % [side, f_name, seg_name]
+				var display_name: String = "%s %s %s" % [
+					side.capitalize(), f_name.capitalize(), seg_name]
+
+				var seg_pos: Vector3 = Vector3(
+					joint_pos.x,
+					joint_pos.y - seg_len * 0.5,
+					joint_pos.z)
+
+				# Taper radius slightly for distal phalanges
+				var r_scale: float = 1.0 - seg_idx * 0.1
+				var seg_part: BodyPart = _create_part(
+					part_name, display_name, seg_pos,
+					_capsule_shape(finger_r * r_scale, seg_len),
+					0.05 * mass_scale, 0.2)
+
+				# Joint limits differ by finger and segment
+				var lo: Vector3
+				var hi: Vector3
+				if is_thumb:
+					if seg_idx == 0:
+						lo = Vector3(-30, -40 * side_sign, -25)
+						hi = Vector3(60, 40 * side_sign, 25)
+					else:
+						lo = Vector3(-10, -5, -5)
+						hi = Vector3(80, 5, 5)
+				else:
+					if seg_idx == 0:
+						lo = Vector3(-15, -8, -10)
+						hi = Vector3(90, 8, 10)
+					else:
+						lo = Vector3(0, -3, -3)
+						hi = Vector3(110, 3, 3)
+
+				_create_joint(prev_part, seg_part, joint_pos, lo, hi)
+
+				# Advance chain
+				joint_pos = Vector3(seg_pos.x, seg_pos.y - seg_len * 0.5, seg_pos.z)
+				prev_part = seg_part
 
 		# ── Arm joints ──────────────────────────────────────────────
 		# Chest -> Clavicle
@@ -329,16 +544,6 @@ func _build_ragdoll() -> void:
 		_create_joint(forearm, hand,
 			Vector3(shoulder_x, forearm.position.y - FOREARM_FRAC * h * 0.5, 0),
 			Vector3(-70, -20, -40), Vector3(70, 20, 40))
-
-		# Hand -> Thumb
-		_create_joint(hand, thumb,
-			Vector3(shoulder_x + side_sign * 0.025 * h, hand.position.y + HAND_FRAC * h * 0.2, 0.01 * h),
-			Vector3(-30, -30, -20), Vector3(60, 30, 20))
-
-		# Hand -> Fingers
-		_create_joint(hand, fingers,
-			Vector3(shoulder_x, hand.position.y - HAND_FRAC * h * 0.5, 0),
-			Vector3(-10, -5, -5), Vector3(90, 5, 5))
 
 	# ── Legs (both sides) ───────────────────────────────────────────────
 	for side_sign: float in [-1.0, 1.0]:
