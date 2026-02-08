@@ -37,6 +37,8 @@ var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _targeting: TargetingSystem = null
 ## The loaded player mesh root (if any).
 var _player_model: Node3D = null
+## Frame counter for one-shot diagnostics.
+var _diag_frames: int = 0
 
 
 func _ready() -> void:
@@ -79,6 +81,20 @@ func _physics_process(delta: float) -> void:
 	_handle_jump()
 	_handle_movement(delta)
 	move_and_slide()
+
+	# One-shot diagnostic at frame 60 (~1 second in)
+	_diag_frames += 1
+	if _diag_frames == 60:
+		var cam: Camera3D = get_active_camera()
+		print("[Player] Diag @ frame 60:")
+		print("  pos=%s  vel=%s  on_floor=%s" % [global_position, velocity, is_on_floor()])
+		print("  head_pivot.y=%.2f  cam=%s  mouse=%d" % [
+			head_pivot.position.y,
+			cam.name if cam != null else "null",
+			Input.mouse_mode])
+		print("  model=%s  model_visible=%s" % [
+			_player_model.name if _player_model != null else "none",
+			str(_player_model.visible) if _player_model != null else "n/a"])
 
 
 # ── Movement ─────────────────────────────────────────────────────────────────
@@ -137,9 +153,9 @@ func _apply_camera_mode() -> void:
 	if is_first_person:
 		camera_fps.current = true
 		camera_tps.current = false
+		# Player model stays visible — CameraFPS cull_mask excludes layer 2.
+		# Hide the blue placeholder capsule.
 		body_mesh.visible = false
-		if _player_model != null:
-			_player_model.visible = false
 	else:
 		camera_fps.current = false
 		camera_tps.current = true
@@ -170,22 +186,48 @@ func _load_player_model() -> void:
 		return
 
 	model.name = "PlayerModel"
+
+	# Strip any physics bodies / collision shapes from the imported scene
+	# (doing this BEFORE adding to tree prevents collisions on first frame)
+	var stripped: int = _strip_physics_nodes(model)
+	if stripped > 0:
+		print("[Player] Stripped %d physics node(s) from model" % stripped)
+
 	# Face -Z (same as player forward) — glTF exports face +Z by default
 	model.rotation.y = PI
 	add_child(model)
 	_player_model = model
 
-	# Put all meshes on visual layer 2 so CameraFPS doesn't render them
-	_set_mesh_layers(model, 2)
+	# Put all visual instances on render layer 2 so CameraFPS culls them
+	var mesh_count: int = _set_visual_layers(model, 2)
+	print("[Player] Set %d visual node(s) to render layer 2" % mesh_count)
 
 	# Stop any auto-playing animations
 	_stop_imported_animations(model)
 
-	# Hide placeholder
+	# Hide placeholder capsule — model replaces it
 	body_mesh.visible = false
-	_apply_camera_mode()
 
-	print("[Player] Model loaded from %s" % player_model_path)
+	# Exclude player model from the SpringArm so it doesn't push the TPS camera
+	_exclude_bodies_from_spring_arm(model)
+
+	_apply_camera_mode()
+	print("[Player] Model loaded: %s" % player_model_path)
+
+
+## Recursively remove CollisionShape3D, StaticBody3D, RigidBody3D, etc.
+## from an imported scene tree. Returns count of nodes removed.
+func _strip_physics_nodes(node: Node) -> int:
+	var removed: int = 0
+	# Walk children in reverse so removal doesn't shift indices
+	for i: int in range(node.get_child_count() - 1, -1, -1):
+		var child: Node = node.get_child(i)
+		if child is CollisionShape3D or child is CollisionObject3D:
+			child.queue_free()
+			removed += 1
+		else:
+			removed += _strip_physics_nodes(child)
+	return removed
 
 
 ## Stop any AnimationPlayers from the Blender import that auto-play.
@@ -198,13 +240,32 @@ func _stop_imported_animations(node: Node) -> void:
 		_stop_imported_animations(child)
 
 
-## Set all MeshInstance3D nodes to the given visual layer (1-based).
-func _set_mesh_layers(node: Node, layer: int) -> void:
-	if node is MeshInstance3D:
-		var mi: MeshInstance3D = node as MeshInstance3D
-		mi.layers = 1 << (layer - 1)
+## Set all VisualInstance3D nodes (meshes, particles, etc.) to the given
+## visual layer (1-based). Returns count of nodes modified.
+func _set_visual_layers(node: Node, layer: int) -> int:
+	var count: int = 0
+	if node is VisualInstance3D:
+		var vi: VisualInstance3D = node as VisualInstance3D
+		vi.layers = 1 << (layer - 1)
+		count += 1
 	for child: Node in node.get_children():
-		_set_mesh_layers(child, layer)
+		count += _set_visual_layers(child, layer)
+	return count
+
+
+## Exclude all physics bodies under `root` from SpringArm3D collision.
+func _exclude_bodies_from_spring_arm(root: Node) -> void:
+	if spring_arm == null:
+		return
+	_collect_and_exclude_bodies(root)
+
+
+func _collect_and_exclude_bodies(node: Node) -> void:
+	if node is CollisionObject3D:
+		var co: CollisionObject3D = node as CollisionObject3D
+		spring_arm.add_excluded_object(co.get_rid())
+	for child: Node in node.get_children():
+		_collect_and_exclude_bodies(child)
 
 
 # ── Public API ───────────────────────────────────────────────────────────────

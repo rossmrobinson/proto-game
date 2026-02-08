@@ -14,16 +14,16 @@ signal posture_changed(new_posture: Posture, old_posture: Posture)
 enum Posture { STANDING, CROUCHING, KNEELING, PRONE }
 
 @export_group("Heights")
-@export var standing_height: float = 1.8
+@export var standing_height: float = 2.0
 @export var crouch_height: float = 1.1
 @export var kneel_height: float = 0.8
 @export var prone_height: float = 0.35
 
 @export_group("Camera Y Offsets")
-@export var standing_camera_y: float = 0.8
-@export var crouch_camera_y: float = 0.4
-@export var kneel_camera_y: float = 0.2
-@export var prone_camera_y: float = 0.1
+@export var standing_camera_y: float = 1.82
+@export var crouch_camera_y: float = 1.0
+@export var kneel_camera_y: float = 0.73
+@export var prone_camera_y: float = 0.32
 
 @export_group("Timing")
 ## CTRL must be released within this time to count as a tap (seconds).
@@ -66,6 +66,7 @@ func _ready() -> void:
 			break
 	_target_height = standing_height
 	_target_camera_y = standing_camera_y
+	print("[Posture] Standing height=%.2f camera_y=%.2f" % [standing_height, standing_camera_y])
 
 
 func _unhandled_input(event: InputEvent) -> void:
