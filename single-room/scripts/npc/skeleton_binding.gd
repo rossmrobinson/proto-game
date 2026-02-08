@@ -74,7 +74,7 @@ func set_mode(p_mode: Mode) -> void:
 	match mode:
 		Mode.ANIMATED:
 			# Clear any bone overrides so animations take control again
-			skeleton.clear_bone_pose_all_overrides()
+			skeleton.clear_bones_global_pose_override()
 			# Snap parts to current bone positions and freeze them
 			_snap_parts_to_bones()
 

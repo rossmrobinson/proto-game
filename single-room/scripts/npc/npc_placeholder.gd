@@ -145,13 +145,17 @@ func _load_model() -> void:
 	print("[NPC] %s: found armature node '%s' (type=%s)" % [npc_name, armature.name, armature.get_class()])
 
 	# Reparent just the armature node into this NPC
+	# Unset owner recursively to avoid "inconsistent owner" warning
+	_clear_owner_recursive(armature)
 	armature.get_parent().remove_child(armature)
 	scene_root.queue_free()
 	add_child(armature)
-	# Zero out the Blender world position so the mesh aligns with our NPC origin
+	# Zero only X and Z — the Y offset is the Blender ground-to-origin height
+	# that keeps the model standing on the floor instead of sinking through it.
 	if armature is Node3D:
-		(armature as Node3D).position = Vector3.ZERO
-		(armature as Node3D).rotation = Vector3.ZERO
+		var arm3d: Node3D = armature as Node3D
+		arm3d.position = Vector3(0.0, arm3d.position.y, 0.0)
+		arm3d.rotation = Vector3.ZERO
 
 	# Find the Skeleton3D within the armature subtree
 	var skel: Skeleton3D = _find_skeleton(armature)
@@ -198,3 +202,11 @@ func _find_skeleton(root: Node) -> Skeleton3D:
 		if found != null:
 			return found
 	return null
+
+
+## Recursively clear the owner on a node and all its descendants.
+## Prevents "inconsistent owner" warnings when reparenting imported sub-trees.
+func _clear_owner_recursive(node: Node) -> void:
+	node.set_owner(null)
+	for child: Node in node.get_children():
+		_clear_owner_recursive(child)
