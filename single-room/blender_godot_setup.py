@@ -93,11 +93,7 @@ def setup_render_settings():
     eevee.taa_samples = 16
 
     # Enable screen space effects similar to our Godot setup
-    eevee.use_gtao = True          # SSAO equivalent
-
-    # Shadow settings (match Godot's 2048 atlas)
-    eevee.shadow_cube_size = '2048'
-    eevee.shadow_cascade_size = '2048'
+    # Note: EEVEE Next always enables SSAO — no manual toggle needed.
 
     # ── Cycles (for baking high-quality normal maps, AO maps) ─────────────
     cycles = scene.cycles if hasattr(scene, 'cycles') else None
@@ -205,8 +201,11 @@ def create_pbr_template_material():
     links.new(normal_tex.outputs['Color'], normal_map.inputs['Color'])
     links.new(normal_map.outputs['Normal'], bsdf.inputs['Normal'])
 
-    # Set normal map to Non-Color
-    # (User needs to set this when they assign the texture)
+    # Normal maps must be Non-Color to avoid sRGB double-correction
+    normal_tex.image_user.use_auto_refresh = True  # harmless default
+    # The colorspace is set on the Image data, not the node — it can only be
+    # assigned after a texture is loaded. Tag the node so a helper can fix it.
+    normal_tex["colorspace_hint"] = "Non-Color"
 
     # ── ORM Packed Texture ───────────────────────────────────────────────
     orm_tex = nodes.new('ShaderNodeTexImage')
@@ -221,14 +220,16 @@ def create_pbr_template_material():
 
     # R = Ambient Occlusion (not directly in Principled BSDF, but glTF uses it)
     # For now, multiply AO with albedo for viewport preview
-    mix_ao = nodes.new('ShaderNodeMixRGB')
+    # Blender 4.x: ShaderNodeMixRGB was removed; use ShaderNodeMix instead.
+    mix_ao = nodes.new('ShaderNodeMix')
+    mix_ao.data_type = 'RGBA'
     mix_ao.blend_type = 'MULTIPLY'
-    mix_ao.inputs['Fac'].default_value = 1.0
+    mix_ao.inputs['Factor'].default_value = 1.0
     mix_ao.location = (-100, 300)
-    links.new(albedo_tex.outputs['Color'], mix_ao.inputs['Color1'])
-    links.new(sep_rgb.outputs['Red'], mix_ao.inputs['Color2'])
+    links.new(albedo_tex.outputs['Color'], mix_ao.inputs['A'])
+    links.new(sep_rgb.outputs['Red'], mix_ao.inputs['B'])
     # Reconnect albedo through AO multiply
-    links.new(mix_ao.outputs['Color'], bsdf.inputs['Base Color'])
+    links.new(mix_ao.outputs['Result'], bsdf.inputs['Base Color'])
 
     # G = Roughness
     links.new(sep_rgb.outputs['Green'], bsdf.inputs['Roughness'])
