@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/greybox_room.tscn" id="1_room"]
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="2_player"]
@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" path="res://scenes/npc_placeholder.tscn" id="5_npc"]
 [ext_resource type="Script" path="res://scripts/systems/grabbable.gd" id="6_grab"]
 [ext_resource type="Script" path="res://scripts/ui/command_indicator.gd" id="7_cmd"]
+[ext_resource type="Script" path="res://scripts/ui/character_editor_panel.gd" id="8_ced"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_crate"]
 size = Vector3(0.5, 0.5, 0.5)
@@ -78,3 +79,6 @@ script = ExtResource("3_diag")
 
 [node name="CommandIndicator" type="CanvasLayer" parent="."]
 script = ExtResource("7_cmd")
+
+[node name="CharacterEditorPanel" type="CanvasLayer" parent="."]
+script = ExtResource("8_ced")
