@@ -11,9 +11,13 @@ extends Node3D
 var nerve_system: NerveSystem = null
 var character_profile: CharacterProfile = null
 var body_language: BodyLanguageSystem = null
+var behavior: NPCBehavior = null
 
 
 func _ready() -> void:
+	# Register in the "npc" group so NPCCommandSystem can find us.
+	add_to_group(&"npc")
+
 	ragdoll.ragdoll_built.connect(_on_ragdoll_built)
 	# Spawn NPC subsystems
 	character_profile = CharacterProfile.new()
@@ -28,6 +32,10 @@ func _ready() -> void:
 	body_language = BodyLanguageSystem.new()
 	body_language.name = "BodyLanguageSystem"
 	add_child(body_language)
+
+	behavior = NPCBehavior.new()
+	behavior.name = "NPCBehavior"
+	add_child(behavior)
 
 
 func _on_ragdoll_built() -> void:

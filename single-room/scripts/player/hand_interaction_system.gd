@@ -63,6 +63,7 @@ var _autopilot_fired: bool = false
 
 @onready var _player: PlayerController = get_parent() as PlayerController
 var _targeting: TargetingSystem = null
+var _command_system: NPCCommandSystem = null
 
 
 func _ready() -> void:
@@ -72,11 +73,12 @@ func _ready() -> void:
 		var anchor_name: String = "LeftHandAnchor" if hand == Hand.LEFT else "RightHandAnchor"
 		hs.anchor = _create_anchor(anchor_name)
 		_hands[hand] = hs
-	# Find sibling TargetingSystem
+	# Find siblings
 	for child: Node in _player.get_children():
 		if child is TargetingSystem:
 			_targeting = child as TargetingSystem
-			break
+		if child is NPCCommandSystem:
+			_command_system = child as NPCCommandSystem
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -175,6 +177,9 @@ func _try_grab(hand: Hand) -> void:
 	if target == null or not target.is_grabbable or target.grabbed_by != null:
 		return
 
+	# Determine the acting entity — commanded NPC or player
+	var actor: Node3D = _get_actor()
+
 	var camera: Camera3D = _player.get_active_camera()
 	if camera == null:
 		return
@@ -190,7 +195,7 @@ func _try_grab(hand: Hand) -> void:
 	hs.hold_distance = dist
 	hs.anchor.global_position = hit_point
 
-	var success: bool = target.grab(_player, hs.anchor, hit_point)
+	var success: bool = target.grab(actor, hs.anchor, hit_point)
 	if success:
 		_set_held(hand, target)
 		hand_grabbed.emit(hand, target)
@@ -210,10 +215,15 @@ func _push_target(hand: Hand) -> void:
 	var target: BodyPart = _get_target()
 	if target == null:
 		return
-	var camera: Camera3D = _player.get_active_camera()
-	if camera == null:
-		return
-	var push_dir: Vector3 = -camera.global_basis.z
+	# Push direction: from the actor toward the target
+	var actor: Node3D = _get_actor()
+	var push_dir: Vector3 = (target.global_position - actor.global_position).normalized()
+	if push_dir.is_zero_approx():
+		var camera: Camera3D = _player.get_active_camera()
+		if camera != null:
+			push_dir = -camera.global_basis.z
+		else:
+			push_dir = Vector3.FORWARD
 	target.apply_hit(push_dir, push_force, target.global_position)
 	hand_pushed.emit(hand, target, push_force)
 
@@ -367,3 +377,10 @@ func get_held(hand: Hand) -> BodyPart:
 	if hs.held != null and is_instance_valid(hs.held):
 		return hs.held
 	return null
+
+
+## Returns the active actor — the commanded NPC's root, or the player.
+func _get_actor() -> Node3D:
+	if _command_system != null and _command_system.is_commanding():
+		return _command_system.commanded_npc as Node3D
+	return _player as Node3D

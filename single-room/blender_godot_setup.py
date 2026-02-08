@@ -424,5 +424,131 @@ def main():
     print("=" * 60 + "\n")
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  10. MPFB EXPORT HELPER
+# ══════════════════════════════════════════════════════════════════════════════
+
+def export_mpfb_to_godot(output_path: str = "//godot_export.glb") -> None:
+    """Export an MPFB-imported MakeHuman character for Godot 4.
+
+    Call this AFTER importing a character from MakeHuman via MPFB.
+    It will:
+      1. Select the armature + all child meshes
+      2. Apply MPFB modifiers (subdivision, corrective smooth, etc.)
+      3. Rename bones to snake_case for Godot convention
+      4. Set normal-map image colorspaces to Non-Color
+      5. Export as .glb with game-ready settings
+
+    Parameters:
+        output_path: Blender-relative path (// = .blend dir). Defaults to
+                     "//godot_export.glb".
+    """
+    import re
+
+    # ── Find the armature ────────────────────────────────────────────────
+    armature: bpy.types.Object = None
+    for obj in bpy.data.objects:
+        if obj.type == 'ARMATURE':
+            armature = obj
+            break
+    if armature is None:
+        print("[MPFB Export] ERROR: No armature found in scene.")
+        return
+
+    # ── Collect armature + child meshes ──────────────────────────────────
+    bpy.ops.object.select_all(action='DESELECT')
+    armature.select_set(True)
+    mesh_objects: list = []
+    for child in armature.children:
+        if child.type == 'MESH':
+            child.select_set(True)
+            mesh_objects.append(child)
+    bpy.context.view_layer.objects.active = armature
+
+    print(f"[MPFB Export] Armature: {armature.name}")
+    print(f"[MPFB Export] Meshes: {[m.name for m in mesh_objects]}")
+
+    # ── Apply modifiers on mesh children ─────────────────────────────────
+    for mesh_obj in mesh_objects:
+        bpy.context.view_layer.objects.active = mesh_obj
+        for mod in list(mesh_obj.modifiers):
+            try:
+                bpy.ops.object.modifier_apply(modifier=mod.name)
+                print(f"  Applied modifier '{mod.name}' on {mesh_obj.name}")
+            except RuntimeError as e:
+                print(f"  WARN: Could not apply '{mod.name}' on {mesh_obj.name}: {e}")
+
+    # ── Rename bones to snake_case ───────────────────────────────────────
+    def to_snake_case(name: str) -> str:
+        """CamelCase / mixedCase / dot.separated → snake_case."""
+        # Replace dots and dashes with underscores
+        name = name.replace('.', '_').replace('-', '_')
+        # Insert underscore before runs of uppercase
+        name = re.sub(r'([A-Z]+)([A-Z][a-z])', r'\1_\2', name)
+        name = re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', name)
+        return name.lower().strip('_')
+
+    bpy.context.view_layer.objects.active = armature
+    bpy.ops.object.mode_set(mode='EDIT')
+    renamed_count: int = 0
+    for bone in armature.data.edit_bones:
+        new_name: str = to_snake_case(bone.name)
+        if new_name != bone.name:
+            bone.name = new_name
+            renamed_count += 1
+    bpy.ops.object.mode_set(mode='OBJECT')
+    print(f"[MPFB Export] Renamed {renamed_count} bones to snake_case")
+
+    # ── Fix normal-map colorspaces ───────────────────────────────────────
+    for mat in bpy.data.materials:
+        if mat.node_tree is None:
+            continue
+        for node in mat.node_tree.nodes:
+            if node.type != 'TEX_IMAGE' or node.image is None:
+                continue
+            # Check our custom hint or image name convention
+            hint = node.get("colorspace_hint", "")
+            is_normal = (
+                hint == "Non-Color"
+                or "normal" in node.name.lower()
+                or "normal" in node.label.lower()
+                or "normal" in node.image.name.lower()
+            )
+            if is_normal and node.image.colorspace_settings.name != 'Non-Color':
+                node.image.colorspace_settings.name = 'Non-Color'
+                print(f"  Fixed colorspace → Non-Color: {node.image.name}")
+
+    # ── Re-select armature + meshes for export ───────────────────────────
+    bpy.ops.object.select_all(action='DESELECT')
+    armature.select_set(True)
+    for mesh_obj in mesh_objects:
+        mesh_obj.select_set(True)
+    bpy.context.view_layer.objects.active = armature
+
+    # ── Export glTF ──────────────────────────────────────────────────────
+    abs_path: str = bpy.path.abspath(output_path)
+    bpy.ops.export_scene.gltf(
+        filepath=abs_path,
+        use_selection=True,
+        export_format='GLB',
+        export_apply=False,         # We already applied modifiers
+        export_texcoords=True,
+        export_normals=True,
+        export_tangents=True,
+        export_colors=True,
+        export_cameras=False,
+        export_lights=False,
+        export_yup=True,            # Godot is Y-up
+        export_animations=True,
+        export_skins=True,
+        export_morph=True,
+        export_morph_normal=True,
+        export_def_bones=True,      # Deformation bones only
+    )
+
+    print(f"\n[MPFB Export] Exported to: {abs_path}")
+    print("[MPFB Export] Drop this .glb into your Godot project's assets/models/ folder.")
+
+
 if __name__ == "__main__":
     main()

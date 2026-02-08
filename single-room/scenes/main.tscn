@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/greybox_room.tscn" id="1_room"]
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="2_player"]
@@ -6,6 +6,7 @@
 [ext_resource type="Environment" path="res://scenes/default_env.tres" id="4_env"]
 [ext_resource type="PackedScene" path="res://scenes/npc_placeholder.tscn" id="5_npc"]
 [ext_resource type="Script" path="res://scripts/systems/grabbable.gd" id="6_grab"]
+[ext_resource type="Script" path="res://scripts/ui/command_indicator.gd" id="7_cmd"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_crate"]
 size = Vector3(0.5, 0.5, 0.5)
@@ -29,6 +30,12 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 
 [node name="NPCPlaceholder" parent="." instance=ExtResource("5_npc")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, -2)
+npc_name = "NPC_Alpha"
+
+[node name="NPCPlaceholder2" parent="." instance=ExtResource("5_npc")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0, -2)
+npc_name = "NPC_Beta"
+body_color = Color(0.72, 0.6, 0.52, 1)
 
 [node name="GrabbableCrate1" type="RigidBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 1.0, -3)
@@ -68,3 +75,6 @@ shape = SubResource("BoxShape3D_crate")
 
 [node name="DiagnosticsOverlay" type="CanvasLayer" parent="."]
 script = ExtResource("3_diag")
+
+[node name="CommandIndicator" type="CanvasLayer" parent="."]
+script = ExtResource("7_cmd")
