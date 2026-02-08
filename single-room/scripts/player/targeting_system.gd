@@ -134,7 +134,7 @@ func _update_target() -> void:
 	var ray_end: Vector3 = origin + direction * max_distance
 	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
 		origin, ray_end)
-	query.collision_mask = 4 | 8  # layer 3 (NPC) + layer 4 (Interactable)
+	query.collision_mask = 4 | 8 | 16  # layer 3 (NPC) + 4 (Interactable) + 5 (SoftTissue)
 	query.collide_with_bodies = true
 
 	var result: Dictionary = space.intersect_ray(query)

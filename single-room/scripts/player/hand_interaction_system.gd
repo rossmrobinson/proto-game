@@ -341,7 +341,7 @@ func _raycast_for_part() -> BodyPart:
 	var ray_end: Vector3 = origin + (-camera.global_basis.z) * grab_distance
 	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
 		origin, ray_end)
-	query.collision_mask = 4 | 8
+	query.collision_mask = 4 | 8 | 16  # layer 3 + 4 + 5 (SoftTissue)
 	query.collide_with_bodies = true
 	var result: Dictionary = space.intersect_ray(query)
 	if result.is_empty():

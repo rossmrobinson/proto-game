@@ -85,10 +85,20 @@ const INTERNAL_PARTS: PackedStringArray = [
 	"vaginal_passage_0", "vaginal_passage_1", "vaginal_passage_2", "vaginal_passage_3",
 ]
 
+## Soft-tissue parts placed on layer 5 (NPC_SoftTissue) instead of layer 3.
+## They still collide with everything external but can be masked separately for
+## fine-grained interaction (e.g. cloth draping, targeted grab filtering).
+const SOFT_TISSUE_PARTS: PackedStringArray = [
+	"left_breast", "right_breast",
+	"left_glute", "right_glute",
+	"penis", "scrotum", "vulva",
+]
+
 
 func _ready() -> void:
 	_build_ragdoll()
 	_apply_collision_exclusions()
+	_assign_soft_tissue_layers()
 	_assign_internal_layers()
 	ragdoll_built.emit()
 
@@ -551,6 +561,28 @@ func _assign_internal_layers() -> void:
 			part.collision_mask = 0
 			part.set_collision_mask_value(6, true)  # Other internal segments
 			part.set_collision_mask_value(7, true)  # Equipment (piercings, toys)
+
+
+## Move soft-tissue parts (breasts, glutes, genitals) to layer 5 (NPC_SoftTissue).
+## They keep the same broad mask as skeletal parts but live on their own layer so
+## gameplay queries can distinguish a grab on a breast vs. a grab on the ribcage.
+func _assign_soft_tissue_layers() -> void:
+	for part_name_key: String in parts:
+		if part_name_key in SOFT_TISSUE_PARTS:
+			var part: BodyPart = parts[part_name_key] as BodyPart
+			# Move off NPC_External (3), onto NPC_SoftTissue (5).
+			# Keep Interactable (4) so targeting/grab queries still find them.
+			part.collision_layer = 0
+			part.set_collision_layer_value(4, true)  # Interactable
+			part.set_collision_layer_value(5, true)  # NPC_SoftTissue
+			# Mask: Environment + Player + NPC_External + Interactable + SoftTissue + Equipment
+			part.collision_mask = 0
+			part.set_collision_mask_value(1, true)  # Environment
+			part.set_collision_mask_value(2, true)  # Player
+			part.set_collision_mask_value(3, true)  # NPC_External
+			part.set_collision_mask_value(4, true)  # Interactable
+			part.set_collision_mask_value(5, true)  # Other soft tissue
+			part.set_collision_mask_value(7, true)  # Equipment
 
 
 # ──────────────────────────────────────────────────────────────────────────────

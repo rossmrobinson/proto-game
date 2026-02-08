@@ -67,11 +67,12 @@ func _ready() -> void:
 			if child.has_method(&"receive_touch"):
 				_nerve_system = child
 				break
-	# Collide with environment, player, other NPCs, interactables
+	# Collide with environment, player, other NPCs, interactables, soft tissue
 	set_collision_mask_value(1, true)
 	set_collision_mask_value(2, true)
 	set_collision_mask_value(3, true)
 	set_collision_mask_value(4, true)
+	set_collision_mask_value(5, true)  # NPC_SoftTissue
 	# Start with some damping for stable ragdoll
 	linear_damp = 1.0
 	angular_damp = 2.0
