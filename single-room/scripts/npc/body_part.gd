@@ -98,6 +98,9 @@ func get_display_name() -> String:
 func grab(grabber: Node3D, grab_body: StaticBody3D, hit_point: Vector3) -> bool:
 	if not is_grabbable or grabbed_by != null:
 		return false
+	if not grab_body.is_inside_tree():
+		push_warning("[BodyPart] grab() called but anchor not in tree yet")
+		return false
 
 	grabbed_by = grabber
 

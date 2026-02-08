@@ -303,6 +303,8 @@ func _create_anchor(anchor_name: String) -> StaticBody3D:
 func _update_anchor(anchor: StaticBody3D, hold_dist: float, delta: float) -> void:
 	if anchor == null or not is_instance_valid(anchor):
 		return
+	if not anchor.is_inside_tree():
+		return
 	var camera: Camera3D = _player.get_active_camera()
 	if camera == null:
 		return

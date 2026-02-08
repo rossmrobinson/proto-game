@@ -25,7 +25,11 @@ func _ready() -> void:
 	# Register in the "npc" group so NPCCommandSystem can find us.
 	add_to_group(&"npc")
 
+	# Note: child _ready() fires BEFORE parent _ready(), so the ragdoll is
+	# already built by the time we reach here.  Connect for future rebuilds,
+	# then call the handler directly.
 	ragdoll.ragdoll_built.connect(_on_ragdoll_built)
+	_on_ragdoll_built()
 	# Spawn NPC subsystems — order matters (brain wires to siblings via deferred)
 	character_profile = CharacterProfile.new()
 	character_profile.name = "CharacterProfile"
