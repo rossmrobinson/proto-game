@@ -1,147 +1,168 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=14 format=3]
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_floor"]
-size = Vector3(10, 0.2, 10)
+# ── Floor material — warm hardwood ───────────────────────────────────────────
+[sub_resource type="StandardMaterial3D" id="mat_floor"]
+albedo_color = Color(0.55, 0.35, 0.2, 1)
+roughness = 0.65
+metallic = 0.0
+uv1_scale = Vector3(4, 4, 4)
 
-[sub_resource type="BoxMesh" id="BoxMesh_floor"]
-size = Vector3(10, 0.2, 10)
+# ── Wall material — clean matte white ───────────────────────────────────────
+[sub_resource type="StandardMaterial3D" id="mat_wall"]
+albedo_color = Color(0.92, 0.91, 0.88, 1)
+roughness = 0.95
+metallic = 0.0
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_floor"]
-albedo_color = Color(0.35, 0.35, 0.35, 1)
-roughness = 0.85
+# ── Ceiling material — pure white matte ─────────────────────────────────────
+[sub_resource type="StandardMaterial3D" id="mat_ceiling"]
+albedo_color = Color(0.95, 0.94, 0.92, 1)
+roughness = 1.0
+metallic = 0.0
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wall"]
-albedo_color = Color(0.45, 0.42, 0.4, 1)
-roughness = 0.9
+# ── Room dimensions: 16'x16' = 4.88m x 4.88m, 8' ceiling = 2.44m ───────────
+# Wall thickness 0.15m. Half-width = 2.44m.
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_wallNS"]
-size = Vector3(10, 3, 0.2)
+# Floor
+[sub_resource type="BoxShape3D" id="shape_floor"]
+size = Vector3(4.88, 0.15, 4.88)
 
-[sub_resource type="BoxMesh" id="BoxMesh_wallNS"]
-size = Vector3(10, 3, 0.2)
+[sub_resource type="BoxMesh" id="mesh_floor"]
+size = Vector3(4.88, 0.15, 4.88)
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_wallEW"]
-size = Vector3(0.2, 3, 10)
+# Walls (north/south — X-aligned)
+[sub_resource type="BoxShape3D" id="shape_wallNS"]
+size = Vector3(4.88, 2.44, 0.15)
 
-[sub_resource type="BoxMesh" id="BoxMesh_wallEW"]
-size = Vector3(0.2, 3, 10)
+[sub_resource type="BoxMesh" id="mesh_wallNS"]
+size = Vector3(4.88, 2.44, 0.15)
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_ceiling"]
-size = Vector3(10, 0.2, 10)
+# Walls (east/west — Z-aligned)
+[sub_resource type="BoxShape3D" id="shape_wallEW"]
+size = Vector3(0.15, 2.44, 4.88)
 
-[sub_resource type="BoxMesh" id="BoxMesh_ceiling"]
-size = Vector3(10, 0.2, 10)
+[sub_resource type="BoxMesh" id="mesh_wallEW"]
+size = Vector3(0.15, 2.44, 4.88)
 
-[sub_resource type="BoxMesh" id="BoxMesh_cube"]
-size = Vector3(0.6, 0.6, 0.6)
+# Ceiling
+[sub_resource type="BoxShape3D" id="shape_ceiling"]
+size = Vector3(4.88, 0.15, 4.88)
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_cube"]
-size = Vector3(0.6, 0.6, 0.6)
+[sub_resource type="BoxMesh" id="mesh_ceiling"]
+size = Vector3(4.88, 0.15, 4.88)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_cube"]
-albedo_color = Color(0.7, 0.3, 0.2, 1)
-roughness = 0.5
-
-[sub_resource type="BoxMesh" id="BoxMesh_table"]
-size = Vector3(1.2, 0.05, 0.8)
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_table"]
-size = Vector3(1.2, 0.05, 0.8)
+# ── Scene tree ───────────────────────────────────────────────────────────────
 
 [node name="GreyboxRoom" type="Node3D"]
 
+# ── Floor ────────────────────────────────────────────────────────────────────
 [node name="Floor" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.075, 0)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Floor"]
-shape = SubResource("BoxShape3D_floor")
+shape = SubResource("shape_floor")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Floor"]
-mesh = SubResource("BoxMesh_floor")
-surface_material_override/0 = SubResource("StandardMaterial3D_floor")
+mesh = SubResource("mesh_floor")
+surface_material_override/0 = SubResource("mat_floor")
 
+# ── Wall North (back wall, -Z) ──────────────────────────────────────────────
 [node name="WallNorth" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, -5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.22, -2.515)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="WallNorth"]
-shape = SubResource("BoxShape3D_wallNS")
+shape = SubResource("shape_wallNS")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="WallNorth"]
-mesh = SubResource("BoxMesh_wallNS")
-surface_material_override/0 = SubResource("StandardMaterial3D_wall")
+mesh = SubResource("mesh_wallNS")
+surface_material_override/0 = SubResource("mat_wall")
 
+# ── Wall South (+Z) ─────────────────────────────────────────────────────────
 [node name="WallSouth" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.22, 2.515)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="WallSouth"]
-shape = SubResource("BoxShape3D_wallNS")
+shape = SubResource("shape_wallNS")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="WallSouth"]
-mesh = SubResource("BoxMesh_wallNS")
-surface_material_override/0 = SubResource("StandardMaterial3D_wall")
+mesh = SubResource("mesh_wallNS")
+surface_material_override/0 = SubResource("mat_wall")
 
+# ── Wall East (+X) ──────────────────────────────────────────────────────────
 [node name="WallEast" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 1.5, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.515, 1.22, 0)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="WallEast"]
-shape = SubResource("BoxShape3D_wallEW")
+shape = SubResource("shape_wallEW")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="WallEast"]
-mesh = SubResource("BoxMesh_wallEW")
-surface_material_override/0 = SubResource("StandardMaterial3D_wall")
+mesh = SubResource("mesh_wallEW")
+surface_material_override/0 = SubResource("mat_wall")
 
+# ── Wall West (-X) ──────────────────────────────────────────────────────────
 [node name="WallWest" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 1.5, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.515, 1.22, 0)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="WallWest"]
-shape = SubResource("BoxShape3D_wallEW")
+shape = SubResource("shape_wallEW")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="WallWest"]
-mesh = SubResource("BoxMesh_wallEW")
-surface_material_override/0 = SubResource("StandardMaterial3D_wall")
+mesh = SubResource("mesh_wallEW")
+surface_material_override/0 = SubResource("mat_wall")
 
+# ── Ceiling ──────────────────────────────────────────────────────────────────
 [node name="Ceiling" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.515, 0)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Ceiling"]
-shape = SubResource("BoxShape3D_ceiling")
+shape = SubResource("shape_ceiling")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Ceiling"]
-mesh = SubResource("BoxMesh_ceiling")
-surface_material_override/0 = SubResource("StandardMaterial3D_wall")
+mesh = SubResource("mesh_ceiling")
+surface_material_override/0 = SubResource("mat_ceiling")
 
-[node name="TestCube" type="RigidBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 1, -2)
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="TestCube"]
-mesh = SubResource("BoxMesh_cube")
-surface_material_override/0 = SubResource("StandardMaterial3D_cube")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="TestCube"]
-shape = SubResource("BoxShape3D_cube")
-
-[node name="Table" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0.75, -3)
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Table"]
-mesh = SubResource("BoxMesh_table")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Table"]
-shape = SubResource("BoxShape3D_table")
-
+# ── Lighting — intimate/dramatic ────────────────────────────────────────────
 [node name="Lighting" type="Node3D" parent="."]
 
-[node name="CeilingLight" type="OmniLight3D" parent="Lighting"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, 0)
-light_color = Color(1, 0.95, 0.85, 1)
-light_energy = 3.0
-light_indirect_energy = 1.5
+# Key light — warm downward spot from front-right, main source of drama
+[node name="KeyLight" type="SpotLight3D" parent="Lighting"]
+transform = Transform3D(0.866, -0.354, 0.354, 0, 0.707, 0.707, -0.5, -0.612, 0.612, 1.5, 2.2, 1.5)
+light_color = Color(1.0, 0.88, 0.72, 1)
+light_energy = 4.0
+light_indirect_energy = 0.6
 shadow_enabled = true
-omni_range = 8.0
+shadow_bias = 0.03
+spot_range = 5.0
+spot_angle = 45.0
+spot_angle_attenuation = 0.8
 
+# Fill light — cool dim wash from the opposite side to soften shadows
 [node name="FillLight" type="OmniLight3D" parent="Lighting"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 1.5, 3)
-light_color = Color(0.85, 0.9, 1, 1)
-light_energy = 1.0
-light_indirect_energy = 0.5
-omni_range = 6.0
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.8, 1.5, -1.5)
+light_color = Color(0.75, 0.82, 0.95, 1)
+light_energy = 0.8
+light_indirect_energy = 0.3
+shadow_enabled = false
+omni_range = 4.5
+omni_attenuation = 1.2
+
+# Rim/accent light — warm glow from behind to create edge highlights
+[node name="RimLight" type="SpotLight3D" parent="Lighting"]
+transform = Transform3D(0.866, 0.354, -0.354, 0, 0.707, 0.707, 0.5, -0.612, 0.612, -1.0, 2.3, -2.0)
+light_color = Color(1.0, 0.82, 0.65, 1)
+light_energy = 2.5
+light_indirect_energy = 0.4
+shadow_enabled = true
+shadow_bias = 0.03
+spot_range = 5.5
+spot_angle = 40.0
+spot_angle_attenuation = 0.9
+
+# Subtle floor bounce — very dim warm omni close to the ground
+[node name="FloorBounce" type="OmniLight3D" parent="Lighting"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0)
+light_color = Color(0.9, 0.75, 0.55, 1)
+light_energy = 0.3
+light_indirect_energy = 0.2
+shadow_enabled = false
+omni_range = 3.5
+omni_attenuation = 1.5
