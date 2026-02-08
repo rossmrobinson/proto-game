@@ -11,7 +11,7 @@ extends Node
 enum Mode { ANIMATED, RAGDOLL }
 
 ## Current sync mode.
-var mode: Mode = Mode.RAGDOLL
+var mode: Mode = Mode.ANIMATED
 
 ## The Skeleton3D from the imported model scene.
 var skeleton: Skeleton3D = null
@@ -165,6 +165,9 @@ func _snap_parts_to_bones() -> void:
 		# Zero out any velocity so parts don't fly off
 		part.linear_velocity = Vector3.ZERO
 		part.angular_velocity = Vector3.ZERO
+		# Freeze as kinematic so they hold position
+		part.freeze = true
+		part.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 
 
 ## Hide the placeholder debug spheres/capsules since we now have a real mesh.

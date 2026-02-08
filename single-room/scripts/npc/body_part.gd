@@ -106,6 +106,8 @@ func grab(grabber: Node3D, grab_body: StaticBody3D, hit_point: Vector3) -> bool:
 
 	var joint: Generic6DOFJoint3D = Generic6DOFJoint3D.new()
 	joint.name = "BodyPartGrabJoint_%s" % part_name
+	# Add to tree FIRST so global_position works
+	get_tree().current_scene.add_child(joint)
 	joint.global_position = hit_point
 
 	joint.node_a = grab_body.get_path()
@@ -128,7 +130,6 @@ func grab(grabber: Node3D, grab_body: StaticBody3D, hit_point: Vector3) -> bool:
 	joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, deg_to_rad(-45))
 	joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT, deg_to_rad(45))
 
-	get_tree().current_scene.add_child(joint)
 	_grab_joint = joint
 
 	# Make the part lighter while grabbed for responsive feel
