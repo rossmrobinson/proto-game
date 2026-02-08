@@ -49,6 +49,10 @@ func bind(p_skeleton: Skeleton3D, p_ragdoll: HumanoidRagdollBuilder) -> void:
 
 	_build_bone_mapping()
 
+	# Snap ragdoll parts to their skeleton bone rest positions so the skin
+	# mesh starts correctly posed before physics takes over.
+	_snap_parts_to_bones()
+
 	if hide_placeholder_meshes:
 		_hide_debug_meshes()
 
@@ -151,13 +155,36 @@ func _build_bone_mapping() -> void:
 			unmatched_bones.size(), ", ".join(unmatched_bones)])
 
 
+## Teleport all mapped ragdoll parts to their skeleton bone rest positions.
+## This aligns the physics bodies with the imported mesh before physics runs.
+func _snap_parts_to_bones() -> void:
+	for bone_idx: int in _bone_to_part:
+		var part: BodyPart = _bone_to_part[bone_idx] as BodyPart
+		var bone_global: Transform3D = skeleton.global_transform * skeleton.get_bone_global_pose(bone_idx)
+		part.global_transform = bone_global
+		# Zero out any velocity so parts don't fly off
+		part.linear_velocity = Vector3.ZERO
+		part.angular_velocity = Vector3.ZERO
+
+
 ## Hide the placeholder debug spheres/capsules since we now have a real mesh.
 func _hide_debug_meshes() -> void:
+	var hidden_count: int = 0
 	for part_name: String in ragdoll.parts:
 		var part: BodyPart = ragdoll.parts[part_name] as BodyPart
-		for child: Node in part.get_children():
-			if child is MeshInstance3D:
-				(child as MeshInstance3D).visible = false
+		hidden_count += _hide_meshes_recursive(part)
+	print("[SkeletonBinding] Hidden %d placeholder meshes" % hidden_count)
+
+
+## Recursively hide all MeshInstance3D nodes under a given root.
+func _hide_meshes_recursive(node: Node) -> int:
+	var count: int = 0
+	for child: Node in node.get_children():
+		if child is MeshInstance3D:
+			(child as MeshInstance3D).visible = false
+			count += 1
+		count += _hide_meshes_recursive(child)
+	return count
 
 
 ## Set all bound ragdoll parts to kinematic (animated mode) or dynamic (ragdoll).
