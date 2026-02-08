@@ -170,8 +170,13 @@ func _load_player_model() -> void:
 		return
 
 	model.name = "PlayerModel"
+	# Face -Z (same as player forward) — glTF exports face +Z by default
+	model.rotation.y = PI
 	add_child(model)
 	_player_model = model
+
+	# Put all meshes on visual layer 2 so CameraFPS doesn't render them
+	_set_mesh_layers(model, 2)
 
 	# Stop any auto-playing animations
 	_stop_imported_animations(model)
@@ -191,6 +196,15 @@ func _stop_imported_animations(node: Node) -> void:
 		ap.autoplay = &""
 	for child: Node in node.get_children():
 		_stop_imported_animations(child)
+
+
+## Set all MeshInstance3D nodes to the given visual layer (1-based).
+func _set_mesh_layers(node: Node, layer: int) -> void:
+	if node is MeshInstance3D:
+		var mi: MeshInstance3D = node as MeshInstance3D
+		mi.layers = 1 << (layer - 1)
+	for child: Node in node.get_children():
+		_set_mesh_layers(child, layer)
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
