@@ -43,17 +43,15 @@ enum Hand { LEFT, RIGHT }
 ## Meters of thrust per vertical scroll tick.
 @export var thrust_per_tick: float = 0.08
 
-# ── Per-hand state ───────────────────────────────────────────────────────────
-var _left_held: BodyPart = null
-var _right_held: BodyPart = null
-var _left_hold_distance: float = 1.5
-var _right_hold_distance: float = 1.5
+# ── Per-hand state (inner class to avoid left_/right_ duplication) ───────────
+class _HandState:
+	var held: BodyPart = null
+	var hold_distance: float = 1.5
+	var pending: bool = false
+	var pending_time: float = 0.0
+	var anchor: StaticBody3D = null
 
-# Click timing (per hand) — deferred single-click pattern
-var _left_pending: bool = false
-var _left_pending_time: float = 0.0
-var _right_pending: bool = false
-var _right_pending_time: float = 0.0
+var _hands: Dictionary = {}  # Hand enum → _HandState
 
 # Middle mouse
 var _middle_press_time: float = -1.0
@@ -63,17 +61,17 @@ var _middle_held: bool = false
 var _autopilot_active: bool = false
 var _autopilot_fired: bool = false
 
-# Grab anchors — one per hand
-var _left_anchor: StaticBody3D = null
-var _right_anchor: StaticBody3D = null
-
 @onready var _player: PlayerController = get_parent() as PlayerController
 var _targeting: TargetingSystem = null
 
 
 func _ready() -> void:
-	_left_anchor = _create_anchor("LeftHandAnchor")
-	_right_anchor = _create_anchor("RightHandAnchor")
+	# Build per-hand state
+	for hand: Hand in [Hand.LEFT, Hand.RIGHT]:
+		var hs: _HandState = _HandState.new()
+		var anchor_name: String = "LeftHandAnchor" if hand == Hand.LEFT else "RightHandAnchor"
+		hs.anchor = _create_anchor(anchor_name)
+		_hands[hand] = hs
 	# Find sibling TargetingSystem
 	for child: Node in _player.get_children():
 		if child is TargetingSystem:
@@ -110,13 +108,12 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(_delta: float) -> void:
 	var now: float = Time.get_ticks_msec() / 1000.0
 
-	# Expire pending single clicks
-	if _left_pending and (now - _left_pending_time) > double_click_window:
-		_execute_single_click(Hand.LEFT)
-		_left_pending = false
-	if _right_pending and (now - _right_pending_time) > double_click_window:
-		_execute_single_click(Hand.RIGHT)
-		_right_pending = false
+	# Expire pending single clicks — check both hands
+	for hand: Hand in _hands:
+		var hs: _HandState = _hands[hand] as _HandState
+		if hs.pending and (now - hs.pending_time) > double_click_window:
+			_execute_single_click(hand)
+			hs.pending = false
 
 	# Expire pending middle click
 	if _middle_pending and (now - _middle_pending_time) > double_click_window:
@@ -131,34 +128,26 @@ func _process(_delta: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	_update_anchor(_left_anchor, _left_hold_distance, delta)
-	_update_anchor(_right_anchor, _right_hold_distance, delta)
-	# Clear invalid held references
-	if _left_held != null and not is_instance_valid(_left_held):
-		_left_held = null
-	if _right_held != null and not is_instance_valid(_right_held):
-		_right_held = null
+	for hand: Hand in _hands:
+		var hs: _HandState = _hands[hand] as _HandState
+		_update_anchor(hs.anchor, hs.hold_distance, delta)
+		# Clear invalid held references
+		if hs.held != null and not is_instance_valid(hs.held):
+			hs.held = null
 
 
 # ── Click Handling ───────────────────────────────────────────────────────────
 
 func _on_hand_click(hand: Hand) -> void:
 	var now: float = Time.get_ticks_msec() / 1000.0
+	var hs: _HandState = _hands[hand] as _HandState
 
-	if hand == Hand.LEFT:
-		if _left_pending and (now - _left_pending_time) <= double_click_window:
-			_left_pending = false
-			_execute_double_click(Hand.LEFT)
-		else:
-			_left_pending = true
-			_left_pending_time = now
+	if hs.pending and (now - hs.pending_time) <= double_click_window:
+		hs.pending = false
+		_execute_double_click(hand)
 	else:
-		if _right_pending and (now - _right_pending_time) <= double_click_window:
-			_right_pending = false
-			_execute_double_click(Hand.RIGHT)
-		else:
-			_right_pending = true
-			_right_pending_time = now
+		hs.pending = true
+		hs.pending_time = now
 
 
 func _execute_single_click(hand: Hand) -> void:
@@ -190,22 +179,18 @@ func _try_grab(hand: Hand) -> void:
 	if camera == null:
 		return
 
+	var hs: _HandState = _hands[hand] as _HandState
+
 	# Use targeting system hit point if available, else approximate
 	var hit_point: Vector3 = target.global_position
 	if _targeting != null and _targeting.current_target == target:
 		hit_point = _targeting.target_hit_point
 
-	var anchor: StaticBody3D = _left_anchor if hand == Hand.LEFT else _right_anchor
 	var dist: float = camera.global_position.distance_to(hit_point)
+	hs.hold_distance = dist
+	hs.anchor.global_position = hit_point
 
-	if hand == Hand.LEFT:
-		_left_hold_distance = dist
-	else:
-		_right_hold_distance = dist
-
-	anchor.global_position = hit_point
-
-	var success: bool = target.grab(_player, anchor, hit_point)
+	var success: bool = target.grab(_player, hs.anchor, hit_point)
 	if success:
 		_set_held(hand, target)
 		hand_grabbed.emit(hand, target)
@@ -277,16 +262,13 @@ func _on_scroll_vertical(direction: float) -> void:
 	# If either hand is holding something, adjust that hand's hold distance.
 	# Otherwise, thrust control.
 	var adjusted: bool = false
-	if _left_held != null:
-		_left_hold_distance = clampf(
-			_left_hold_distance + direction * 0.15,
-			hold_distance_min, hold_distance_max)
-		adjusted = true
-	if _right_held != null:
-		_right_hold_distance = clampf(
-			_right_hold_distance + direction * 0.15,
-			hold_distance_min, hold_distance_max)
-		adjusted = true
+	for hand: Hand in _hands:
+		var hs: _HandState = _hands[hand] as _HandState
+		if hs.held != null:
+			hs.hold_distance = clampf(
+				hs.hold_distance + direction * 0.15,
+				hold_distance_min, hold_distance_max)
+			adjusted = true
 
 	if not adjusted:
 		pelvis_thrust.emit(direction * thrust_per_tick)
@@ -361,25 +343,27 @@ func _raycast_for_part() -> BodyPart:
 
 
 func _get_held(hand: Hand) -> BodyPart:
-	return _left_held if hand == Hand.LEFT else _right_held
+	var hs: _HandState = _hands[hand] as _HandState
+	return hs.held
 
 
 func _set_held(hand: Hand, part: BodyPart) -> void:
-	if hand == Hand.LEFT:
-		_left_held = part
-	else:
-		_right_held = part
+	var hs: _HandState = _hands[hand] as _HandState
+	hs.held = part
 
 
 ## True if either hand is holding something.
 func is_grabbing() -> bool:
-	return (_left_held != null and is_instance_valid(_left_held)) or \
-		(_right_held != null and is_instance_valid(_right_held))
+	for hand: Hand in _hands:
+		var hs: _HandState = _hands[hand] as _HandState
+		if hs.held != null and is_instance_valid(hs.held):
+			return true
+	return false
 
 
 ## Get what a specific hand is holding (or null).
 func get_held(hand: Hand) -> BodyPart:
-	var held: BodyPart = _get_held(hand)
-	if held != null and is_instance_valid(held):
-		return held
+	var hs: _HandState = _hands[hand] as _HandState
+	if hs.held != null and is_instance_valid(hs.held):
+		return hs.held
 	return null

@@ -58,13 +58,12 @@ func grab(grabber: Node3D, grab_body: StaticBody3D, hit_point: Vector3) -> bool:
 	joint.node_b = get_path()
 
 	# Lock linear axes so the object follows the grab point
-	for axis: int in range(3):
-		joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -0.01)
-		joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, 0.01)
-		joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -0.01)
-		joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, 0.01)
-		joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -0.01)
-		joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, 0.01)
+	joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -0.01)
+	joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, 0.01)
+	joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -0.01)
+	joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, 0.01)
+	joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -0.01)
+	joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, 0.01)
 
 	# Allow free rotation so the player can orient the object
 	joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, deg_to_rad(-180))
@@ -97,6 +96,10 @@ func release() -> void:
 	gravity_scale = 1.0
 	linear_damp = 0.0
 	angular_damp = 0.0
+
+	var prev: Node3D = grabbed_by
+	grabbed_by = null
+	released.emit(prev)
 
 	var prev_grabber: Node3D = grabbed_by
 	grabbed_by = null

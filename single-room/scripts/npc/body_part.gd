@@ -45,6 +45,9 @@ var _prev_velocity: Vector3 = Vector3.ZERO
 ## Time since last impact event (seconds). Used for cooldown.
 var _impact_timer: float = 0.0
 
+# ── Cached References ────────────────────────────────────────────────────────
+var _sfx_engine: Node = null
+
 # ── Internal ─────────────────────────────────────────────────────────────────
 ## Reference to the parent ragdoll root (set by HumanoidRagdollBuilder)
 var ragdoll_owner: Node3D = null
@@ -76,6 +79,8 @@ func _ready() -> void:
 	contact_monitor = true
 	max_contacts_reported = 4
 	body_entered.connect(_on_body_entered)
+	# Cache SFX engine reference once
+	_sfx_engine = _find_sfx_engine()
 
 
 func get_part_name() -> String:
@@ -130,7 +135,8 @@ func grab(grabber: Node3D, grab_body: StaticBody3D, hit_point: Vector3) -> bool:
 	part_grabbed.emit(part_name, grabber)
 	# Notify nerve system
 	if _nerve_system != null:
-		_nerve_system.call(&"receive_touch", part_name, 0, 1.0)  # TouchType.GRAB = 0
+		_nerve_system.call(&"receive_touch", part_name,
+			NerveSystem.TouchType.GRAB, 1.0)
 	return true
 
 
@@ -149,17 +155,19 @@ func release() -> void:
 	part_released.emit(part_name, prev)
 	# Notify nerve system
 	if _nerve_system != null:
-		_nerve_system.call(&"receive_touch", part_name, 1, 0.5)  # TouchType.RELEASE = 1
+		_nerve_system.call(&"receive_touch", part_name,
+			NerveSystem.TouchType.RELEASE, 0.5)
 
 
 ## Apply an impact force to this body part.
 func apply_hit(force_dir: Vector3, magnitude: float, point: Vector3) -> void:
 	apply_impulse(force_dir * magnitude, point - global_position)
 	part_hit.emit(part_name, magnitude, point)
-	# Notify nerve system — push type (2) with intensity scaled by force
+	# Notify nerve system — push type with intensity scaled by force
 	if _nerve_system != null:
 		var intensity: float = clampf(magnitude / 10.0, 0.1, 3.0)
-		_nerve_system.call(&"receive_touch", part_name, 2, intensity)  # TouchType.PUSH = 2
+		_nerve_system.call(&"receive_touch", part_name,
+			NerveSystem.TouchType.PUSH, intensity)
 
 
 func _physics_process(delta: float) -> void:
@@ -206,17 +214,17 @@ func _on_body_entered(other: Node) -> void:
 	# Also fire the generic part_hit for any listeners
 	part_hit.emit(part_name, intensity, global_position)
 
-	# Notify nerve system — IMPACT type (7) with velocity-scaled intensity
+	# Notify nerve system — IMPACT type with velocity-scaled intensity
 	if _nerve_system != null:
-		_nerve_system.call(&"receive_touch", part_name, 7, intensity)
+		_nerve_system.call(&"receive_touch", part_name,
+			NerveSystem.TouchType.IMPACT, intensity)
 
 	# Trigger impact SFX proportional to force
 	_play_impact_sfx(impact_speed, intensity)
 
 
 func _play_impact_sfx(speed: float, intensity: float) -> void:
-	var sfx: Node = _find_sfx_engine()
-	if sfx == null:
+	if _sfx_engine == null:
 		return
 
 	# Volume scales with intensity: soft taps are quiet, hard hits are loud
@@ -225,23 +233,32 @@ func _play_impact_sfx(speed: float, intensity: float) -> void:
 	var pitch: float = lerpf(1.2, 0.7, clampf(speed / 15.0, 0.0, 1.0))
 
 	# Try to play a registered impact sound
-	var stream: AudioStream = sfx.call(&"get_sound", 0, "body_impact") as AudioStream  # Category.IMPACT = 0
+	var stream: AudioStream = _sfx_engine.call(
+		&"get_sound", SFXEngine.Category.IMPACT, "body_impact") as AudioStream
 	if stream != null:
-		sfx.call(&"play_at", stream, global_position, &"SFX", volume_db, pitch)
+		_sfx_engine.call(&"play_at", stream, global_position,
+			SFXEngine.BUS_SFX, volume_db, pitch)
 		# Heavy hits also rumble the LFE
 		if intensity > 1.5:
 			var lfe_vol: float = volume_db - 6.0
-			sfx.call(&"play_at", stream, global_position, &"LFE", lfe_vol, pitch * 0.6)
+			_sfx_engine.call(&"play_at", stream, global_position,
+				SFXEngine.BUS_LFE, lfe_vol, pitch * 0.6)
 
 
 func _find_sfx_engine() -> Node:
-	# Check autoload first
-	if Engine.has_singleton(&"SFXEngine"):
-		return Engine.get_singleton(&"SFXEngine") as Node
-	# Walk up to scene root and find by group or class
-	var root: Node = get_tree().current_scene
+	# Check autoload (autoloads live under /root/<name>)
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return null
+	var autoload: Node = tree.root.get_node_or_null(^"SFXEngine")
+	if autoload != null:
+		return autoload
+	# Fallback: find in scene tree by class
+	var root: Node = tree.current_scene
 	if root == null:
 		return null
+	if root is SFXEngine:
+		return root
 	for child: Node in root.get_children():
 		if child is SFXEngine:
 			return child

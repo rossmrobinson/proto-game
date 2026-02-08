@@ -173,27 +173,26 @@ func _create_spring_joint() -> void:
 	_spring_joint.node_b = get_path()
 
 	# Free linear movement (spring pull) on all axes.
-	for axis: int in 3:
-		# Linear limits — allow movement up to max_stretch.
-		_spring_joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -pt.max_stretch)
-		_spring_joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, pt.max_stretch)
-		_spring_joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -pt.max_stretch)
-		_spring_joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, pt.max_stretch)
-		_spring_joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -pt.max_stretch)
-		_spring_joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, pt.max_stretch)
+	# Linear limits — allow movement up to max_stretch.
+	_spring_joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -pt.max_stretch)
+	_spring_joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, pt.max_stretch)
+	_spring_joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -pt.max_stretch)
+	_spring_joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, pt.max_stretch)
+	_spring_joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -pt.max_stretch)
+	_spring_joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, pt.max_stretch)
 
-		# Enable linear spring on all axes.
-		_spring_joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_SPRING, true)
-		_spring_joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_SPRING, true)
-		_spring_joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_SPRING, true)
+	# Enable linear spring on all axes.
+	_spring_joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_SPRING, true)
+	_spring_joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_SPRING, true)
+	_spring_joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_SPRING, true)
 
-		# Spring stiffness and damping.
-		_spring_joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_STIFFNESS, pt.attachment_stiffness)
-		_spring_joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_DAMPING, pt.attachment_damping)
-		_spring_joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_STIFFNESS, pt.attachment_stiffness)
-		_spring_joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_DAMPING, pt.attachment_damping)
-		_spring_joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_STIFFNESS, pt.attachment_stiffness)
-		_spring_joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_DAMPING, pt.attachment_damping)
+	# Spring stiffness and damping.
+	_spring_joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_STIFFNESS, pt.attachment_stiffness)
+	_spring_joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_DAMPING, pt.attachment_damping)
+	_spring_joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_STIFFNESS, pt.attachment_stiffness)
+	_spring_joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_DAMPING, pt.attachment_damping)
+	_spring_joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_STIFFNESS, pt.attachment_stiffness)
+	_spring_joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_DAMPING, pt.attachment_damping)
 
 	# Lock angular — piercings don't independently rotate on their own joint.
 	_spring_joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, 0.0)
