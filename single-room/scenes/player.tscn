@@ -24,6 +24,7 @@ roughness = 0.6
 collision_layer = 2
 collision_mask = 13
 script = ExtResource("1_player")
+player_model_path = "res://assets/models/player1.glb"
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.0, 0)
