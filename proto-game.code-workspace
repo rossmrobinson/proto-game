@@ -1,0 +1,29 @@
+{
+    "folders": [
+        {
+            "path": "."
+        }
+    ],
+    "settings": {
+        "editor.tabSize": 4,
+        "editor.insertSpaces": false,
+        "files.associations": {
+            "*.gd": "gdscript",
+            "*.tscn": "ini",
+            "*.tres": "ini",
+            "*.godot": "ini",
+            "*.import": "ini"
+        },
+        "files.exclude": {
+            "**/.godot": true,
+            "**/*.import": true
+        },
+        "search.exclude": {
+            "**/.godot": true
+        },
+        "[gdscript]": {
+            "editor.tabSize": 4,
+            "editor.insertSpaces": false
+        }
+    }
+}

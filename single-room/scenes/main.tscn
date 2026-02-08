@@ -1,0 +1,70 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/greybox_room.tscn" id="1_room"]
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="2_player"]
+[ext_resource type="Script" path="res://scripts/systems/diagnostics_overlay.gd" id="3_diag"]
+[ext_resource type="Environment" path="res://scenes/default_env.tres" id="4_env"]
+[ext_resource type="PackedScene" path="res://scenes/npc_placeholder.tscn" id="5_npc"]
+[ext_resource type="Script" path="res://scripts/systems/grabbable.gd" id="6_grab"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_crate"]
+size = Vector3(0.5, 0.5, 0.5)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_crate"]
+size = Vector3(0.5, 0.5, 0.5)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_crate"]
+albedo_color = Color(0.6, 0.45, 0.25, 1)
+roughness = 0.8
+
+[node name="Main" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("4_env")
+
+[node name="GreyboxRoom" parent="." instance=ExtResource("1_room")]
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+
+[node name="NPCPlaceholder" parent="." instance=ExtResource("5_npc")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, -2)
+
+[node name="GrabbableCrate1" type="RigidBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 1.0, -3)
+mass = 3.0
+script = ExtResource("6_grab")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="GrabbableCrate1"]
+mesh = SubResource("BoxMesh_crate")
+surface_material_override/0 = SubResource("StandardMaterial3D_crate")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="GrabbableCrate1"]
+shape = SubResource("BoxShape3D_crate")
+
+[node name="GrabbableCrate2" type="RigidBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 1.0, -3)
+mass = 3.0
+script = ExtResource("6_grab")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="GrabbableCrate2"]
+mesh = SubResource("BoxMesh_crate")
+surface_material_override/0 = SubResource("StandardMaterial3D_crate")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="GrabbableCrate2"]
+shape = SubResource("BoxShape3D_crate")
+
+[node name="GrabbableCrate3" type="RigidBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 1.5, -3)
+mass = 3.0
+script = ExtResource("6_grab")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="GrabbableCrate3"]
+mesh = SubResource("BoxMesh_crate")
+surface_material_override/0 = SubResource("StandardMaterial3D_crate")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="GrabbableCrate3"]
+shape = SubResource("BoxShape3D_crate")
+
+[node name="DiagnosticsOverlay" type="CanvasLayer" parent="."]
+script = ExtResource("3_diag")

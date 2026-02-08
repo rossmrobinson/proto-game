@@ -1,0 +1,59 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1_player"]
+[ext_resource type="Script" path="res://scripts/player/interaction_system.gd" id="2_interact"]
+[ext_resource type="Script" path="res://scripts/systems/grab_system.gd" id="3_grab"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
+radius = 0.35
+height = 1.8
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_body"]
+radius = 0.35
+height = 1.8
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
+albedo_color = Color(0.3, 0.5, 0.8, 1)
+roughness = 0.6
+
+[node name="Player" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 13
+script = ExtResource("1_player")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("CapsuleShape3D_body")
+
+[node name="BodyMesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+layers = 3
+mesh = SubResource("CapsuleMesh_body")
+surface_material_override/0 = SubResource("StandardMaterial3D_body")
+
+[node name="HeadPivot" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+
+[node name="CameraFPS" type="Camera3D" parent="HeadPivot"]
+cull_mask = 1048573
+fov = 75.0
+near = 0.05
+
+[node name="SpringArm3D" type="SpringArm3D" parent="HeadPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
+collision_mask = 1
+spring_length = 3.0
+
+[node name="CameraTPS" type="Camera3D" parent="HeadPivot/SpringArm3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0, 0)
+fov = 70.0
+
+[node name="InteractionRay" type="RayCast3D" parent="HeadPivot"]
+target_position = Vector3(0, 0, -2.5)
+collision_mask = 8
+
+[node name="InteractionSystem" type="Node" parent="."]
+script = ExtResource("2_interact")
+
+[node name="GrabSystem" type="Node3D" parent="."]
+script = ExtResource("3_grab")

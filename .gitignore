@@ -1,0 +1,21 @@
+# Godot
+.godot/
+*.import
+
+# Environment (secrets, tokens, local config)
+.env
+.env.*
+
+# OS junk
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Blender backups
+*.blend1
+*.blend2
+
+# Editor
+*.swp
+*.swo
+*~
