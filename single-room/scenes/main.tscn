@@ -32,10 +32,12 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 [node name="NPCPlaceholder" parent="." instance=ExtResource("5_npc")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, -2)
 npc_name = "NPC_Alpha"
+model_name = "Ada"
 
 [node name="NPCPlaceholder2" parent="." instance=ExtResource("5_npc")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0, -2)
 npc_name = "NPC_Beta"
+model_name = "Vero"
 body_color = Color(0.72, 0.6, 0.52, 1)
 
 [node name="GrabbableCrate1" type="RigidBody3D" parent="."]
