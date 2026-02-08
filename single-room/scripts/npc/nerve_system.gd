@@ -18,6 +18,7 @@ enum TouchType {
 	STROKE,        ## Gentle surface drag (future)
 	PULL,          ## Directional drag while held (future)
 	PRESS,         ## Sustained pressure (e.g., lean against)
+	IMPACT,        ## Velocity-based collision (auto-detected by BodyPart)
 }
 
 ## Per-part runtime stimulation accumulator.
@@ -163,6 +164,9 @@ func _get_touch_multiplier(touch_type: TouchType, zone: NerveSensitivity.Zone) -
 			base = 1.2
 		TouchType.PRESS:
 			base = 0.6
+		TouchType.IMPACT:
+			# Velocity-based collisions — raw intensity already carries the speed
+			base = 1.0
 
 	# Zone modifiers
 	match zone:
@@ -174,8 +178,13 @@ func _get_touch_multiplier(touch_type: TouchType, zone: NerveSensitivity.Zone) -
 		NerveSensitivity.Zone.PAIN_PRONE:
 			if touch_type == TouchType.PUSH or touch_type == TouchType.PUSH_RELEASE:
 				base *= 1.5
+			elif touch_type == TouchType.IMPACT:
+				base *= 1.8  # Impacts hurt more on pain-prone zones
 		NerveSensitivity.Zone.TICKLISH:
 			if touch_type == TouchType.STROKE:
 				base *= 1.8
+		NerveSensitivity.Zone.PRESSURE_POINT:
+			if touch_type == TouchType.IMPACT:
+				base *= 1.4  # Pressure points amplify impact force
 
 	return base

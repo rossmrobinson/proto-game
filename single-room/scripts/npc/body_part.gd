@@ -9,6 +9,7 @@ extends RigidBody3D
 signal part_grabbed(part_name: String, by: Node3D)
 signal part_released(part_name: String, by: Node3D)
 signal part_hit(part_name: String, force: float, hit_point: Vector3)
+signal part_impact(part_name: String, impact_force: float, other_body: Node)
 
 ## Which body part this represents (e.g., "head", "left_upper_arm", "right_hand")
 @export var part_name: String = ""
@@ -21,6 +22,14 @@ signal part_hit(part_name: String, force: float, hit_point: Vector3)
 ## Whether this part can be grabbed
 @export var is_grabbable: bool = true
 
+@export_group("Impact Detection")
+## Minimum relative velocity (m/s) to register as an impact.
+@export var impact_velocity_threshold: float = 1.5
+## Cooldown between impact events to prevent spam (seconds).
+@export var impact_cooldown: float = 0.15
+## Multiplier converting velocity (m/s) to nerve intensity.
+@export var impact_intensity_scale: float = 0.4
+
 ## Nerve sensitivity data (assigned by ragdoll builder or manually).
 var nerve_sensitivity: NerveSensitivity = null
 ## Reference to the NPC's NerveSystem (set by builder or _ready scan).
@@ -29,6 +38,12 @@ var _nerve_system: Node = null
 # ── Grab State ───────────────────────────────────────────────────────────────
 var grabbed_by: Node3D = null
 var _grab_joint: Generic6DOFJoint3D = null
+
+# ── Impact State ─────────────────────────────────────────────────────────────
+## Velocity from previous physics frame for delta-v computation.
+var _prev_velocity: Vector3 = Vector3.ZERO
+## Time since last impact event (seconds). Used for cooldown.
+var _impact_timer: float = 0.0
 
 # ── Internal ─────────────────────────────────────────────────────────────────
 ## Reference to the parent ragdoll root (set by HumanoidRagdollBuilder)
@@ -57,6 +72,10 @@ func _ready() -> void:
 	# Start with some damping for stable ragdoll
 	linear_damp = 1.0
 	angular_damp = 2.0
+	# Enable contact monitoring for velocity-based impact detection
+	contact_monitor = true
+	max_contacts_reported = 4
+	body_entered.connect(_on_body_entered)
 
 
 func get_part_name() -> String:
@@ -143,8 +162,87 @@ func apply_hit(force_dir: Vector3, magnitude: float, point: Vector3) -> void:
 		_nerve_system.call(&"receive_touch", part_name, 2, intensity)  # TouchType.PUSH = 2
 
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
+	# Tick impact cooldown
+	if _impact_timer > 0.0:
+		_impact_timer -= delta
+
 	# Auto-release if grab joint stretches too far
 	if grabbed_by != null and _grab_joint != null and is_instance_valid(_grab_joint):
 		if global_position.distance_to(_grab_joint.global_position) > grab_break_distance:
 			release()
+
+	# Store velocity for next-frame delta-v computation
+	_prev_velocity = linear_velocity
+
+
+# ── Velocity-Based Impact Detection ──────────────────────────────────────────
+
+func _on_body_entered(other: Node) -> void:
+	if _impact_timer > 0.0:
+		return  # Still in cooldown
+
+	# Compute relative velocity
+	var other_vel: Vector3 = Vector3.ZERO
+	if other is RigidBody3D:
+		other_vel = (other as RigidBody3D).linear_velocity
+	elif other is CharacterBody3D:
+		other_vel = (other as CharacterBody3D).velocity
+
+	# Delta-v: how fast the two objects approached each other
+	var relative_vel: Vector3 = _prev_velocity - other_vel
+	var impact_speed: float = relative_vel.length()
+
+	if impact_speed < impact_velocity_threshold:
+		return  # Too gentle to register
+
+	_impact_timer = impact_cooldown
+
+	# Scale intensity by velocity
+	var intensity: float = clampf(impact_speed * impact_intensity_scale, 0.1, 5.0)
+
+	# Emit signal with real force value
+	part_impact.emit(part_name, intensity, other)
+	# Also fire the generic part_hit for any listeners
+	part_hit.emit(part_name, intensity, global_position)
+
+	# Notify nerve system — IMPACT type (7) with velocity-scaled intensity
+	if _nerve_system != null:
+		_nerve_system.call(&"receive_touch", part_name, 7, intensity)
+
+	# Trigger impact SFX proportional to force
+	_play_impact_sfx(impact_speed, intensity)
+
+
+func _play_impact_sfx(speed: float, intensity: float) -> void:
+	var sfx: Node = _find_sfx_engine()
+	if sfx == null:
+		return
+
+	# Volume scales with intensity: soft taps are quiet, hard hits are loud
+	var volume_db: float = lerpf(-24.0, 0.0, clampf(intensity / 3.0, 0.0, 1.0))
+	# Pitch varies slightly for natural feel, heavier hits sound lower
+	var pitch: float = lerpf(1.2, 0.7, clampf(speed / 15.0, 0.0, 1.0))
+
+	# Try to play a registered impact sound
+	var stream: AudioStream = sfx.call(&"get_sound", 0, "body_impact") as AudioStream  # Category.IMPACT = 0
+	if stream != null:
+		sfx.call(&"play_at", stream, global_position, &"SFX", volume_db, pitch)
+		# Heavy hits also rumble the LFE
+		if intensity > 1.5:
+			var lfe_vol: float = volume_db - 6.0
+			sfx.call(&"play_at", stream, global_position, &"LFE", lfe_vol, pitch * 0.6)
+
+
+func _find_sfx_engine() -> Node:
+	# Check autoload first
+	if Engine.has_singleton(&"SFXEngine"):
+		return Engine.get_singleton(&"SFXEngine") as Node
+	# Walk up to scene root and find by group or class
+	var root: Node = get_tree().current_scene
+	if root == null:
+		return null
+	for child: Node in root.get_children():
+		if child is SFXEngine:
+			return child
+	return null
