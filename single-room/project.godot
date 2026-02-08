@@ -18,6 +18,16 @@ config/icon="res://icon.svg"
 
 3d/physics_engine="Jolt Physics"
 
+[layer_names]
+
+3d_physics/layer_1="Environment"
+3d_physics/layer_2="Player"
+3d_physics/layer_3="NPC_External"
+3d_physics/layer_4="Interactable"
+3d_physics/layer_5="NPC_SoftTissue"
+3d_physics/layer_6="NPC_Internal"
+3d_physics/layer_7="Equipment"
+
 [rendering]
 
 rendering_device/driver.windows="d3d12"

@@ -79,8 +79,17 @@ const PASSAGE_SEGMENTS_ANAL: int = 3
 const PASSAGE_SEGMENTS_VAGINAL: int = 4
 
 
+## Part names that should be placed on the internal-only physics layer.
+const INTERNAL_PARTS: PackedStringArray = [
+	"anal_passage_0", "anal_passage_1", "anal_passage_2",
+	"vaginal_passage_0", "vaginal_passage_1", "vaginal_passage_2", "vaginal_passage_3",
+]
+
+
 func _ready() -> void:
 	_build_ragdoll()
+	_apply_collision_exclusions()
+	_assign_internal_layers()
 	ragdoll_built.emit()
 
 
@@ -510,6 +519,38 @@ func _create_passage_chain(passage_name: String, anchor_part: BodyPart,
 		prev_part = seg
 
 	return chain
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  COLLISION EXCLUSIONS
+# ──────────────────────────────────────────────────────────────────────────────
+
+## Add collision exceptions between every directly-jointed pair of body parts.
+## Adjacent parts are held together by joints — if they also collide via the
+## physics broadphase they'll jitter violently.  Non-adjacent parts (e.g.
+## hand vs thigh on the same NPC) remain free to collide for posing.
+func _apply_collision_exclusions() -> void:
+	for joint: Generic6DOFJoint3D in joints:
+		var a: BodyPart = get_node_or_null(joint.node_a) as BodyPart
+		var b: BodyPart = get_node_or_null(joint.node_b) as BodyPart
+		if a != null and b != null:
+			a.add_collision_exception_with(b)
+			b.add_collision_exception_with(a)
+
+
+## Move passage segments to layer 6 (NPC_Internal) so they don't interact
+## with external physics.  They keep mask layer 3 so rays/queries can reach them.
+func _assign_internal_layers() -> void:
+	for part_name_key: String in parts:
+		if part_name_key in INTERNAL_PARTS:
+			var part: BodyPart = parts[part_name_key] as BodyPart
+			# Clear external layers
+			part.collision_layer = 0
+			part.set_collision_layer_value(6, true)  # NPC_Internal
+			# Only collide with other internals + equipment
+			part.collision_mask = 0
+			part.set_collision_mask_value(6, true)  # Other internal segments
+			part.set_collision_mask_value(7, true)  # Equipment (piercings, toys)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

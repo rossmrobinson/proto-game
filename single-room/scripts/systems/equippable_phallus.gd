@@ -91,6 +91,7 @@ func equip(npc: NPCPlaceholder) -> void:
 	_shaft.gravity_scale = 1.0
 	_shaft.linear_damp = 2.0
 	_shaft.angular_damp = 4.0
+	_shaft.continuous_cd = true  # Prevent tunneling through thin body parts
 
 	# Capsule collision
 	var capsule: CapsuleShape3D = CapsuleShape3D.new()
@@ -119,6 +120,20 @@ func equip(npc: NPCPlaceholder) -> void:
 	var scene_root: Node = npc.get_tree().current_scene
 	scene_root.add_child(_shaft)
 	_shaft.global_position = shaft_pos
+
+	# Set equipment layer (7) + external NPC layer (3) for interaction queries
+	_shaft.collision_layer = 0
+	_shaft.set_collision_layer_value(3, true)   # NPC_External (targeting)
+	_shaft.set_collision_layer_value(4, true)   # Interactable
+	_shaft.set_collision_layer_value(7, true)   # Equipment
+	_shaft.collision_mask = 0
+	_shaft.set_collision_mask_value(1, true)    # Environment
+	_shaft.set_collision_mask_value(2, true)    # Player
+	_shaft.set_collision_mask_value(3, true)    # Other NPC parts
+	_shaft.set_collision_mask_value(6, true)    # NPC_Internal (passages)
+
+	# Exclude collision between shaft and host pelvis (they're jointed)
+	_shaft.add_collision_exception_with(pelvis)
 
 	# Link the shaft to the NPC's ragdoll_owner so it can find nerve system
 	_shaft.ragdoll_owner = npc

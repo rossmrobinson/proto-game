@@ -99,9 +99,15 @@ func _setup_physics() -> void:
 	angular_damp = 5.0
 	continuous_cd = true
 
-	# Collision on layer 4 (Interactable), scan layer 3 (NPC) + 1 (World).
-	collision_layer = 8  # bit 4
-	collision_mask = 5   # bits 1 + 3
+	# Collision: Equipment layer (7) + Interactable (4)
+	# Scans: Environment (1) + NPC_External (3) + NPC_Internal (6)
+	collision_layer = 0
+	set_collision_layer_value(4, true)  # Interactable
+	set_collision_layer_value(7, true)  # Equipment
+	collision_mask = 0
+	set_collision_mask_value(1, true)   # Environment
+	set_collision_mask_value(3, true)   # NPC_External
+	set_collision_mask_value(6, true)   # NPC_Internal (passages)
 
 	_collision = CollisionShape3D.new()
 	_collision.name = "PiercingCollision"
