@@ -69,6 +69,9 @@ func _apply_gravity(delta: float) -> void:
 
 
 func _handle_jump() -> void:
+	var jump_enabled: bool = get_meta(&"jump_enabled", true) as bool
+	if not jump_enabled:
+		return
 	if Input.is_action_just_pressed(&"jump") and is_on_floor():
 		velocity.y = jump_impulse
 
@@ -82,6 +85,9 @@ func _handle_movement(delta: float) -> void:
 	
 	var is_sprinting: bool = Input.is_action_pressed(&"sprint")
 	var target_speed: float = sprint_speed if is_sprinting else walk_speed
+	# Apply posture speed modifier if present
+	var speed_mult: float = get_meta(&"speed_multiplier", 1.0) as float
+	target_speed *= speed_mult
 	
 	if direction.length() > 0.0:
 		velocity.x = lerpf(velocity.x, direction.x * target_speed, acceleration * delta)

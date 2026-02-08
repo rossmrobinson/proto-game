@@ -222,3 +222,40 @@ func _stop_sequence_internal() -> void:
 
 func _smooth_step(t: float) -> float:
 	return t * t * (3.0 - 2.0 * t)
+
+
+## Apply an additive angular offset layer from the BodyLanguageSystem.
+## Each key is a joint_key, each value is a Vector3 of degree offsets.
+var _offset_layer: Dictionary = {}
+
+func apply_offset_layer(offsets: Dictionary) -> void:
+	_offset_layer = offsets
+	# Re-apply targets with the new offsets mixed in
+	if _active:
+		_apply_targets_with_offsets()
+
+
+func _apply_targets_with_offsets() -> void:
+	var stiffness_mult: float = 1.0
+	if _target_pose != null:
+		stiffness_mult = _target_pose.drive_stiffness
+
+	var s: float = spring_stiffness * stiffness_mult
+	var d: float = spring_damping * stiffness_mult
+
+	# All keys from both pose targets and offset layer
+	var all_keys: Dictionary = {}
+	for key: String in _current_targets:
+		all_keys[key] = true
+	for key: String in _offset_layer:
+		all_keys[key] = true
+
+	for joint_key: String in all_keys:
+		var joint: Generic6DOFJoint3D = ragdoll.joint_map.get(joint_key) as Generic6DOFJoint3D
+		if joint == null:
+			continue
+		var base_target: Vector3 = _current_targets.get(joint_key, Vector3.ZERO) as Vector3
+		var offset: Vector3 = _offset_layer.get(joint_key, Vector3.ZERO) as Vector3
+		_enable_spring(joint, base_target + offset, s, d)
+		if not _driven_joints.has(joint_key):
+			_driven_joints.append(joint_key)
