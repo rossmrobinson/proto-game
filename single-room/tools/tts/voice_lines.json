@@ -1,0 +1,328 @@
+{
+  "npcs": [
+    {
+      "name": "NPC_Alpha",
+      "voice": "af_bella",
+      "speed": 1.0,
+      "lang": "en-us",
+      "categories": [
+        {
+          "name": "greetings",
+          "lines": [
+            "Hey there.",
+            "Oh, hi.",
+            "Well, hello.",
+            "Hey, you.",
+            "What's up?",
+            "Mm, hey."
+          ]
+        },
+        {
+          "name": "idle",
+          "lines": [
+            "Hmm.",
+            "Mm-hm.",
+            "Huh.",
+            "Hmm, okay.",
+            "Interesting.",
+            "So...",
+            "This is fine.",
+            "Just standing here, I guess."
+          ]
+        },
+        {
+          "name": "curious",
+          "lines": [
+            "What are you doing?",
+            "What's that about?",
+            "You okay over there?",
+            "That's... new.",
+            "Wait, what?",
+            "Hmm, what now?"
+          ]
+        },
+        {
+          "name": "annoyed",
+          "lines": [
+            "Can you not?",
+            "Hey. Stop.",
+            "Really?",
+            "Knock it off.",
+            "Ugh.",
+            "Seriously?"
+          ]
+        },
+        {
+          "name": "surprised",
+          "lines": [
+            "Whoa!",
+            "Oh!",
+            "What the—",
+            "Okay, I was not expecting that.",
+            "That just happened.",
+            "Huh. Alright then."
+          ]
+        },
+        {
+          "name": "amused",
+          "lines": [
+            "Ha!",
+            "That's kind of funny.",
+            "Oh, that's good.",
+            "Nice.",
+            "Okay, that was amusing.",
+            "Really? Okay."
+          ]
+        },
+        {
+          "name": "pain",
+          "lines": [
+            "Ow!",
+            "Ow, hey!",
+            "That hurt!",
+            "Ah!",
+            "Ouch!",
+            "Easy!"
+          ]
+        },
+        {
+          "name": "comfort",
+          "lines": [
+            "Mmm.",
+            "That's nice.",
+            "Yeah, that's... nice.",
+            "Okay. I like that.",
+            "Mm, keep doing that.",
+            "That feels good."
+          ]
+        },
+        {
+          "name": "grabbed",
+          "lines": [
+            "Oh!",
+            "Hey!",
+            "What are you—",
+            "Easy there.",
+            "Careful.",
+            "Oh. Okay."
+          ]
+        },
+        {
+          "name": "released",
+          "lines": [
+            "Thanks.",
+            "Okay.",
+            "That's better.",
+            "Alright.",
+            "Hm."
+          ]
+        },
+        {
+          "name": "commanded",
+          "lines": [
+            "What do you need?",
+            "Okay, I'm listening.",
+            "Tell me what to do.",
+            "Alright, what now?",
+            "Ready.",
+            "Go ahead."
+          ]
+        },
+        {
+          "name": "command-released",
+          "lines": [
+            "Okay, I'm done.",
+            "Back to me, then.",
+            "Fine, I'll do my own thing.",
+            "Alright.",
+            "Sure."
+          ]
+        },
+        {
+          "name": "effort",
+          "lines": [
+            "Nngh.",
+            "Ugh, this is heavy.",
+            "Almost...",
+            "Come on...",
+            "Got it.",
+            "There."
+          ]
+        },
+        {
+          "name": "startled",
+          "lines": [
+            "Ah!",
+            "What was that?!",
+            "Did you hear that?",
+            "Oh god.",
+            "Whoa, whoa.",
+            "Hey!"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "NPC_Beta",
+      "voice": "am_adam",
+      "speed": 0.95,
+      "lang": "en-us",
+      "categories": [
+        {
+          "name": "greetings",
+          "lines": [
+            "Hey.",
+            "Yo.",
+            "Sup.",
+            "Oh, hey.",
+            "What's going on?",
+            "Hey there."
+          ]
+        },
+        {
+          "name": "idle",
+          "lines": [
+            "Hmm.",
+            "Yep.",
+            "Alright.",
+            "Cool.",
+            "...",
+            "Just vibing.",
+            "Nothing happening, huh.",
+            "So what are we doing?"
+          ]
+        },
+        {
+          "name": "curious",
+          "lines": [
+            "What's the plan?",
+            "What are you up to?",
+            "Huh. That's different.",
+            "What's going on over there?",
+            "Wait, hold on.",
+            "You trying something?"
+          ]
+        },
+        {
+          "name": "annoyed",
+          "lines": [
+            "Dude.",
+            "Come on, man.",
+            "Really, though?",
+            "Hey, cut it out.",
+            "Not cool.",
+            "Seriously."
+          ]
+        },
+        {
+          "name": "surprised",
+          "lines": [
+            "Whoa!",
+            "Oh!",
+            "The hell?",
+            "That was unexpected.",
+            "Well, okay.",
+            "Huh."
+          ]
+        },
+        {
+          "name": "amused",
+          "lines": [
+            "Ha.",
+            "That's pretty good.",
+            "Nice one.",
+            "Okay, that's funny.",
+            "Not bad.",
+            "Classic."
+          ]
+        },
+        {
+          "name": "pain",
+          "lines": [
+            "Ow!",
+            "Hey, watch it!",
+            "That hurt!",
+            "Agh!",
+            "Jeez!",
+            "Easy, easy!"
+          ]
+        },
+        {
+          "name": "comfort",
+          "lines": [
+            "Mm.",
+            "Yeah, that's alright.",
+            "Not bad.",
+            "Okay, I'm into that.",
+            "That's... actually nice.",
+            "Keep going."
+          ]
+        },
+        {
+          "name": "grabbed",
+          "lines": [
+            "Oh!",
+            "Hey, hey!",
+            "What the—",
+            "Careful, man.",
+            "Alright, alright.",
+            "Okay."
+          ]
+        },
+        {
+          "name": "released",
+          "lines": [
+            "Thanks.",
+            "About time.",
+            "Cool.",
+            "Alright.",
+            "Mm."
+          ]
+        },
+        {
+          "name": "commanded",
+          "lines": [
+            "What's up?",
+            "Yeah?",
+            "What do you want?",
+            "I'm here.",
+            "Alright, go.",
+            "What's the move?"
+          ]
+        },
+        {
+          "name": "command-released",
+          "lines": [
+            "Cool, I'm out.",
+            "Back to it, then.",
+            "Doing my thing.",
+            "Got it.",
+            "Sure."
+          ]
+        },
+        {
+          "name": "effort",
+          "lines": [
+            "Ugh.",
+            "Heavy...",
+            "Almost got it.",
+            "Come on...",
+            "There we go.",
+            "Done."
+          ]
+        },
+        {
+          "name": "startled",
+          "lines": [
+            "Whoa!",
+            "What?!",
+            "The hell was that?",
+            "Jeez!",
+            "Dude!",
+            "Hey!"
+          ]
+        }
+      ]
+    }
+  ]
+}
