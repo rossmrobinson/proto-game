@@ -30,6 +30,8 @@ extends CharacterBody3D
 var is_first_person: bool = true
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _targeting: TargetingSystem = null
+## The loaded player mesh armature (if any).
+var _player_armature: Node3D = null
 
 
 func _ready() -> void:
@@ -40,6 +42,8 @@ func _ready() -> void:
 		if child is TargetingSystem:
 			_targeting = child as TargetingSystem
 			break
+	# Load the Player1 model from the blend file
+	_load_player_model()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -127,16 +131,101 @@ func _apply_camera_mode() -> void:
 	if is_first_person:
 		camera_fps.current = true
 		camera_tps.current = false
-		# Hide the body in first person to prevent clipping
-		body_mesh.set_layer_mask_value(2, false)
-		# FPS camera ignores layer 2 (PlayerBody), but it doesn't matter since mesh is hidden
-		camera_fps.set_cull_mask_value(2, false)
-		camera_tps.set_cull_mask_value(2, true)
+		# Hide the placeholder capsule
+		body_mesh.visible = false
+		# Show the real player mesh if loaded (near-plane clips the head)
+		if _player_armature != null:
+			_player_armature.visible = true
 	else:
 		camera_fps.current = false
 		camera_tps.current = true
-		# Show the body in third person
-		body_mesh.set_layer_mask_value(2, true)
+		# In TPS show the real mesh; hide placeholder if real mesh loaded
+		if _player_armature != null:
+			_player_armature.visible = true
+			body_mesh.visible = false
+		else:
+			body_mesh.visible = true
+
+
+# ── Player Model Loading ─────────────────────────────────────────────────────
+
+## Load the Player1 skinned mesh from the shared .blend file.
+func _load_player_model() -> void:
+	var blend_path: String = "res://assets/models/room1-models.blend"
+	if not ResourceLoader.exists(blend_path):
+		push_warning("[Player] Model file not found: %s" % blend_path)
+		return
+
+	var scene_res: PackedScene = load(blend_path) as PackedScene
+	if scene_res == null:
+		push_warning("[Player] Failed to load model scene")
+		return
+
+	var scene_root: Node3D = scene_res.instantiate() as Node3D
+	if scene_root == null:
+		push_warning("[Player] Model instantiation failed")
+		return
+
+	# Find the Player1 armature
+	var armature: Node = _find_child_by_name(scene_root, "Player1")
+	if armature == null:
+		push_warning("[Player] 'Player1' armature not found in .blend")
+		scene_root.queue_free()
+		return
+
+	# Reparent into the player
+	_clear_owner_recursive(armature)
+	armature.get_parent().remove_child(armature)
+	scene_root.queue_free()
+	add_child(armature)
+
+	# Position: keep the Blender Y offset (ground-to-origin height), zero X/Z
+	if armature is Node3D:
+		var arm3d: Node3D = armature as Node3D
+		arm3d.position = Vector3(0.0, arm3d.position.y, 0.0)
+		arm3d.rotation = Vector3.ZERO
+
+	_player_armature = armature as Node3D
+
+	# Put mesh on visual layer 1 so FPS camera can see the body
+	for mesh_inst: MeshInstance3D in _find_meshes_recursive(armature):
+		mesh_inst.layers = 1  # Layer 1 only — FPS near-plane clips the head
+
+	# Hide the blue placeholder capsule
+	body_mesh.visible = false
+
+	print("[Player] Player1 model loaded")
+
+
+## Find a direct child whose name contains the target (case-insensitive).
+func _find_child_by_name(root: Node, target: String) -> Node:
+	var target_lower: String = target.to_lower()
+	for child: Node in root.get_children():
+		if child.name.to_lower().contains(target_lower):
+			return child
+	# Deeper search
+	for child: Node in root.get_children():
+		var found: Node = _find_child_by_name(child, target)
+		if found != null:
+			return found
+	return null
+
+
+## Recursively collect all MeshInstance3D nodes.
+func _find_meshes_recursive(node: Node) -> Array[MeshInstance3D]:
+	var result: Array[MeshInstance3D] = []
+	for child: Node in node.get_children():
+		if child is MeshInstance3D:
+			result.append(child as MeshInstance3D)
+		result.append_array(_find_meshes_recursive(child))
+	return result
+
+
+## Recursively clear owners to avoid reparent warnings.
+func _clear_owner_recursive(node: Node) -> void:
+	node.set_owner(null)
+	for child: Node in node.get_children():
+		_clear_owner_recursive(child)
 
 
 # ── Public API ───────────────────────────────────────────────────────────────

@@ -91,26 +91,14 @@ func _on_ragdoll_built() -> void:
 		_load_model()
 
 
-## Called when any body part is grabbed — unfreeze just that part.
-func _on_part_grabbed(p_part_name: String, _by: Node3D) -> void:
-	if not ragdoll.parts.has(p_part_name):
-		return
-	var part: BodyPart = ragdoll.parts[p_part_name] as BodyPart
-	# Unfreeze so the grab joint can move it while the skeleton drives everything else
-	part.freeze = false
+## Called when any body part is grabbed — springs auto-weaken via grabbed_spring_ratio.
+func _on_part_grabbed(_p_part_name: String, _by: Node3D) -> void:
+	pass  # Active ragdoll handles this — grabbed parts get weaker springs automatically
 
 
-## Called when a body part is released — snap it back and re-freeze.
-func _on_part_released(p_part_name: String, _by: Node3D) -> void:
-	if not ragdoll.parts.has(p_part_name):
-		return
-	var part: BodyPart = ragdoll.parts[p_part_name] as BodyPart
-	# Re-freeze so the skeleton takes over again
-	part.freeze = true
-	part.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
-	part.linear_velocity = Vector3.ZERO
-	part.angular_velocity = Vector3.ZERO
-	# Skeleton sync will snap it back to the bone position on the next frame
+## Called when a body part is released — springs auto-restore.
+func _on_part_released(_p_part_name: String, _by: Node3D) -> void:
+	pass  # Active ragdoll handles this — part springs back to bone pose on its own
 
 
 ## Load the skinned mesh from the .blend import and bind its skeleton to the ragdoll.

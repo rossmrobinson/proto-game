@@ -1,17 +1,32 @@
 class_name SkeletonBinding
 extends Node
-## Syncs a Skeleton3D (from an imported mesh) with our ragdoll physics bodies.
+## Active-ragdoll skeleton binding.
 ##
-## Two modes:
-##   ANIMATED  – Skeleton drives physics bodies (default when playing anims).
-##   RAGDOLL   – Physics bodies drive skeleton (free-fall / grabbed).
+## Physics bodies are ALWAYS dynamic (never frozen). Spring forces push each
+## part toward its skeleton bone pose. Grabbed parts have weaker springs so the
+## player can pull them. When every part is free, the NPC holds its idle pose
+## with a natural, slightly alive feel.
+##
+## The skeleton is written back from physics every frame so the skinned mesh
+## follows the ragdoll, not the other way around.
 ##
 ## Uses HumanoidRagdollBuilder.BONE_NAME_MAP for name resolution.
 
-enum Mode { ANIMATED, RAGDOLL }
+## ── Tuning ──────────────────────────────────────────────────────────────────
 
-## Current sync mode.
-var mode: Mode = Mode.ANIMATED
+## Positional spring stiffness (N/m). Higher = stiffer pose hold.
+@export var spring_stiffness: float = 400.0
+## Positional damping. Prevents oscillation.
+@export var spring_damping: float = 40.0
+## Angular spring stiffness (N·m/rad). Higher = stiffer rotation hold.
+@export var angular_stiffness: float = 80.0
+## Angular damping.
+@export var angular_damping: float = 12.0
+## Multiplier applied to spring stiffness while a part is grabbed (0-1).
+## Lower = easier to pull away from pose.
+@export_range(0.0, 1.0) var grabbed_spring_ratio: float = 0.05
+
+## ── References ──────────────────────────────────────────────────────────────
 
 ## The Skeleton3D from the imported model scene.
 var skeleton: Skeleton3D = null
@@ -21,10 +36,6 @@ var ragdoll: HumanoidRagdollBuilder = null
 
 ## Cached mapping: bone_idx (int) → BodyPart node.
 var _bone_to_part: Dictionary = {}
-
-## Cached mapping: bone_idx (int) → rest-pose offset from part origin.
-## Used to compensate for differences between bone pivot and body center.
-var _bone_rest_offsets: Dictionary = {}
 
 ## If true, placeholder debug meshes on ragdoll parts are hidden
 ## (because the real skinned mesh is visible instead).
@@ -49,77 +60,71 @@ func bind(p_skeleton: Skeleton3D, p_ragdoll: HumanoidRagdollBuilder) -> void:
 
 	_build_bone_mapping()
 
-	# Snap ragdoll parts to their skeleton bone rest positions so the skin
-	# mesh starts correctly posed before physics takes over.
+	# Teleport parts to bone positions before springs kick in
 	_snap_parts_to_bones()
 
 	if hide_placeholder_meshes:
 		_hide_debug_meshes()
 
-	# Apply initial mode state
-	if mode == Mode.ANIMATED:
-		_set_parts_kinematic(true)
-
 	set_physics_process(true)
-	print("[SkeletonBinding] Bound %d bones to ragdoll parts (mode=%s)" % [
-		_bone_to_part.size(), "ANIMATED" if mode == Mode.ANIMATED else "RAGDOLL"])
+	print("[SkeletonBinding] Active ragdoll bound — %d bones, springs=%.0f/%.0f" % [
+		_bone_to_part.size(), spring_stiffness, angular_stiffness])
 
 
-## Switch between animation-driven and physics-driven modes.
-func set_mode(p_mode: Mode) -> void:
-	if mode == p_mode:
-		return
-	mode = p_mode
-
-	match mode:
-		Mode.ANIMATED:
-			# Clear any bone overrides so animations take control again
-			skeleton.clear_bones_global_pose_override()
-			# Snap parts to current bone positions and freeze them
-			_snap_parts_to_bones()
-
-		Mode.RAGDOLL:
-			# Unfreeze ragdoll parts so physics takes over
-			_set_parts_dynamic()
-			# Stop animation player if one exists
-			var anim_player: AnimationPlayer = _find_anim_player()
-			if anim_player != null and anim_player.is_playing():
-				anim_player.pause()
-
-
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	if skeleton == null or ragdoll == null:
 		return
-
-	match mode:
-		Mode.ANIMATED:
-			_sync_skeleton_to_ragdoll()
-		Mode.RAGDOLL:
-			_sync_ragdoll_to_skeleton()
+	_apply_spring_forces(delta)
+	_write_skeleton_from_physics()
 
 
-## ANIMATED mode: skeleton bone transforms → physics body positions.
-## Skips any part currently being grabbed so the player's hand drives it.
-func _sync_skeleton_to_ragdoll() -> void:
+## ── Spring Forces ───────────────────────────────────────────────────────────
+
+## Apply PD-controller spring forces pushing each part toward its bone pose.
+func _apply_spring_forces(_delta: float) -> void:
 	for bone_idx: int in _bone_to_part:
 		var part: BodyPart = _bone_to_part[bone_idx] as BodyPart
-		# Don't fight the grab joint — let the player move this part freely
-		if part.grabbed_by != null:
-			continue
 		var bone_global: Transform3D = skeleton.global_transform * skeleton.get_bone_global_pose(bone_idx)
-		part.global_position = bone_global.origin
-		part.global_basis = bone_global.basis
+
+		# Weaken springs on grabbed parts so they yield to the player
+		var stiff_mult: float = grabbed_spring_ratio if part.grabbed_by != null else 1.0
+
+		# ── Position spring ──────────────────────────────────────────────
+		var displacement: Vector3 = bone_global.origin - part.global_position
+		var force: Vector3 = displacement * spring_stiffness * stiff_mult
+		force -= part.linear_velocity * spring_damping * stiff_mult
+		part.apply_central_force(force)
+
+		# ── Rotation spring ──────────────────────────────────────────────
+		var current_quat: Quaternion = part.global_basis.get_rotation_quaternion()
+		var target_quat: Quaternion = bone_global.basis.get_rotation_quaternion()
+		# Shortest-arc difference
+		var diff: Quaternion = target_quat * current_quat.inverse()
+		# Ensure we take the short path
+		if diff.w < 0.0:
+			diff = -diff
+		var axis: Vector3 = Vector3(diff.x, diff.y, diff.z)
+		var sin_half: float = axis.length()
+		if sin_half > 0.001:
+			axis = axis / sin_half
+			var angle: float = 2.0 * atan2(sin_half, diff.w)
+			if angle > PI:
+				angle -= TAU
+			var torque: Vector3 = axis * angle * angular_stiffness * stiff_mult
+			torque -= part.angular_velocity * angular_damping * stiff_mult
+			part.apply_torque(torque)
 
 
-## RAGDOLL mode: physics body transforms → skeleton bone overrides.
-func _sync_ragdoll_to_skeleton() -> void:
+## ── Skeleton Writeback ──────────────────────────────────────────────────────
+
+## Write physics body transforms back into skeleton bone poses so the skinned
+## mesh follows the ragdoll every frame.
+func _write_skeleton_from_physics() -> void:
 	for bone_idx: int in _bone_to_part:
 		var part: BodyPart = _bone_to_part[bone_idx] as BodyPart
-		# Convert part's global transform to skeleton-local space
 		var skel_inv: Transform3D = skeleton.global_transform.affine_inverse()
 		var part_in_skel: Transform3D = skel_inv * part.global_transform
 
-		# Get parent bone's global pose to express this as a local override
 		var parent_idx: int = skeleton.get_bone_parent(bone_idx)
 		if parent_idx >= 0:
 			var parent_global: Transform3D = skeleton.get_bone_global_pose(parent_idx)
@@ -128,6 +133,8 @@ func _sync_ragdoll_to_skeleton() -> void:
 		else:
 			skeleton.set_bone_pose(bone_idx, part_in_skel)
 
+
+## ── Bone Mapping ────────────────────────────────────────────────────────────
 
 ## Build the bone_idx → BodyPart lookup from BONE_NAME_MAP.
 func _build_bone_mapping() -> void:
@@ -138,14 +145,12 @@ func _build_bone_mapping() -> void:
 	for bone_idx: int in range(bone_count):
 		var bone_name: String = skeleton.get_bone_name(bone_idx)
 
-		# Check if this Blender bone name maps to one of our ragdoll parts
 		if HumanoidRagdollBuilder.BONE_NAME_MAP.has(bone_name):
 			var part_name: String = HumanoidRagdollBuilder.BONE_NAME_MAP[bone_name] as String
 			if ragdoll.parts.has(part_name):
 				_bone_to_part[bone_idx] = ragdoll.parts[part_name]
 			else:
-				push_warning("[SkeletonBinding] Bone '%s' maps to part '%s' but part not found in ragdoll" % [bone_name, part_name])
-		# Also try lowercase bone name (Blender sometimes exports differently)
+				push_warning("[SkeletonBinding] Bone '%s' maps to part '%s' but part not found" % [bone_name, part_name])
 		elif HumanoidRagdollBuilder.BONE_NAME_MAP.has(bone_name.to_lower()):
 			var part_name: String = HumanoidRagdollBuilder.BONE_NAME_MAP[bone_name.to_lower()] as String
 			if ragdoll.parts.has(part_name):
@@ -158,26 +163,26 @@ func _build_bone_mapping() -> void:
 			unmatched_bones.size(), ", ".join(unmatched_bones)])
 
 
-## Teleport all mapped ragdoll parts to their skeleton bone rest positions.
-## This aligns the physics bodies with the imported mesh before physics runs.
+## ── Helpers ─────────────────────────────────────────────────────────────────
+
+## Teleport all mapped ragdoll parts to their skeleton bone positions.
+## Called once at bind time so springs don't have to close a big gap.
 func _snap_parts_to_bones() -> void:
 	for bone_idx: int in _bone_to_part:
 		var part: BodyPart = _bone_to_part[bone_idx] as BodyPart
 		var bone_global: Transform3D = skeleton.global_transform * skeleton.get_bone_global_pose(bone_idx)
 		part.global_transform = bone_global
-		# Zero out any velocity so parts don't fly off
 		part.linear_velocity = Vector3.ZERO
 		part.angular_velocity = Vector3.ZERO
-		# Freeze as kinematic so they hold position
-		part.freeze = true
-		part.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+		# Keep dynamic — springs hold the pose, not kinematic freeze
+		part.freeze = false
 
 
 ## Hide the placeholder debug spheres/capsules since we now have a real mesh.
 func _hide_debug_meshes() -> void:
 	var hidden_count: int = 0
-	for part_name: String in ragdoll.parts:
-		var part: BodyPart = ragdoll.parts[part_name] as BodyPart
+	for part_name_key: String in ragdoll.parts:
+		var part: BodyPart = ragdoll.parts[part_name_key] as BodyPart
 		hidden_count += _hide_meshes_recursive(part)
 	print("[SkeletonBinding] Hidden %d placeholder meshes" % hidden_count)
 
@@ -191,34 +196,3 @@ func _hide_meshes_recursive(node: Node) -> int:
 			count += 1
 		count += _hide_meshes_recursive(child)
 	return count
-
-
-## Set all bound ragdoll parts to kinematic (animated mode) or dynamic (ragdoll).
-func _set_parts_kinematic(kinematic: bool) -> void:
-	for bone_idx: int in _bone_to_part:
-		var part: BodyPart = _bone_to_part[bone_idx] as BodyPart
-		if kinematic:
-			part.freeze = true
-			part.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
-		else:
-			part.freeze = false
-
-
-## Unfreeze all ragdoll parts so physics drives them.
-func _set_parts_dynamic() -> void:
-	for part_key: String in ragdoll.parts:
-		var part: BodyPart = ragdoll.parts[part_key] as BodyPart
-		part.freeze = false
-
-
-## Find an AnimationPlayer sibling or child of the skeleton's parent.
-func _find_anim_player() -> AnimationPlayer:
-	if skeleton == null:
-		return null
-	var parent: Node = skeleton.get_parent()
-	if parent == null:
-		return null
-	for child: Node in parent.get_children():
-		if child is AnimationPlayer:
-			return child as AnimationPlayer
-	return null
