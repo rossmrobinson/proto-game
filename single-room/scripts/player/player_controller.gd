@@ -131,15 +131,12 @@ func _apply_camera_mode() -> void:
 	if is_first_person:
 		camera_fps.current = true
 		camera_tps.current = false
-		# Hide the placeholder capsule
+		# Hide everything in FPS — mesh on layer 2 is already excluded by cull_mask
 		body_mesh.visible = false
-		# Show the real player mesh if loaded (near-plane clips the head)
-		if _player_armature != null:
-			_player_armature.visible = true
 	else:
 		camera_fps.current = false
 		camera_tps.current = true
-		# In TPS show the real mesh; hide placeholder if real mesh loaded
+		# TPS: show real mesh if loaded, else show placeholder
 		if _player_armature != null:
 			_player_armature.visible = true
 			body_mesh.visible = false
@@ -187,9 +184,13 @@ func _load_player_model() -> void:
 
 	_player_armature = armature as Node3D
 
-	# Put mesh on visual layer 1 so FPS camera can see the body
+	# Put mesh on visual layer 2 — FPS camera (cull_mask bit 1 off) won't render it,
+	# but TPS camera (default all-layers mask) will.
 	for mesh_inst: MeshInstance3D in _find_meshes_recursive(armature):
-		mesh_inst.layers = 1  # Layer 1 only — FPS near-plane clips the head
+		mesh_inst.layers = 2  # Layer 2 only
+
+	# Stop any auto-playing Blender animations that fight the CharacterBody3D
+	_stop_imported_animations(armature)
 
 	# Hide the blue placeholder capsule
 	body_mesh.visible = false
@@ -226,6 +227,16 @@ func _clear_owner_recursive(node: Node) -> void:
 	node.set_owner(null)
 	for child: Node in node.get_children():
 		_clear_owner_recursive(child)
+
+
+## Stop any AnimationPlayers from the Blender import that auto-play.
+func _stop_imported_animations(node: Node) -> void:
+	if node is AnimationPlayer:
+		var ap: AnimationPlayer = node as AnimationPlayer
+		ap.stop()
+		ap.autoplay = &""
+	for child: Node in node.get_children():
+		_stop_imported_animations(child)
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
