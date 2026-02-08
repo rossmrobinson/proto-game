@@ -27,9 +27,8 @@ func _ready() -> void:
 
 	# Note: child _ready() fires BEFORE parent _ready(), so the ragdoll is
 	# already built by the time we reach here.  Connect for future rebuilds,
-	# then call the handler directly.
+	# then call the handler after all subsystems are spawned.
 	ragdoll.ragdoll_built.connect(_on_ragdoll_built)
-	_on_ragdoll_built()
 	# Spawn NPC subsystems — order matters (brain wires to siblings via deferred)
 	character_profile = CharacterProfile.new()
 	character_profile.name = "CharacterProfile"
@@ -65,6 +64,9 @@ func _ready() -> void:
 	brain = NPCBrain.new()
 	brain.name = "NPCBrain"
 	add_child(brain)
+
+	# Now that all subsystems exist, run the ragdoll-built handler
+	_on_ragdoll_built()
 
 
 func _on_ragdoll_built() -> void:
