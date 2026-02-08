@@ -1,9 +1,5 @@
-[gd_scene format=3 uid="uid://gqqejgaaq548"]
+[gd_scene load_steps=2 format=3 uid="uid://gqqejgaaq548"]
 
-[ext_resource type="PackedScene" uid="uid://bft36pqr28cjr" path="res://assets/models/room1-models.blend" id="1_w2tb2"]
+[ext_resource type="PackedScene" path="res://scenes/main.tscn" id="1_main"]
 
-[node name="Node3D" type="Node3D" unique_id=1806501153]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.060860634, 0)
-
-[node name="room1-models" parent="." unique_id=1070455552 instance=ExtResource("1_w2tb2")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -53.474224, -0.060860634, 28.432705)
+[node name="Main" instance=ExtResource("1_main")]
