@@ -104,12 +104,21 @@ func _load_model() -> void:
 		push_warning("[NPC] Model scene instantiation failed")
 		return
 
+	# Debug: list all top-level children in the imported scene
+	var child_names: PackedStringArray = []
+	for child: Node in scene_root.get_children():
+		child_names.append(child.name)
+	print("[NPC] %s: .blend scene children: %s" % [npc_name, ", ".join(child_names)])
+
 	# Find the named armature/mesh matching our model_name
 	var armature: Node = _find_armature(scene_root, model_name)
 	if armature == null:
-		push_warning("[NPC] Armature '%s' not found in %s" % [model_name, blend_path])
+		push_warning("[NPC] Armature '%s' not found in %s — children: %s" % [
+			model_name, blend_path, ", ".join(child_names)])
 		scene_root.queue_free()
 		return
+
+	print("[NPC] %s: found armature node '%s' (type=%s)" % [npc_name, armature.name, armature.get_class()])
 
 	# Reparent just the armature node into this NPC
 	armature.get_parent().remove_child(armature)

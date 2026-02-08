@@ -11,7 +11,7 @@ extends Node
 enum Mode { ANIMATED, RAGDOLL }
 
 ## Current sync mode.
-var mode: Mode = Mode.ANIMATED
+var mode: Mode = Mode.RAGDOLL
 
 ## The Skeleton3D from the imported model scene.
 var skeleton: Skeleton3D = null
@@ -52,8 +52,13 @@ func bind(p_skeleton: Skeleton3D, p_ragdoll: HumanoidRagdollBuilder) -> void:
 	if hide_placeholder_meshes:
 		_hide_debug_meshes()
 
+	# Apply initial mode state
+	if mode == Mode.ANIMATED:
+		_set_parts_kinematic(true)
+
 	set_physics_process(true)
-	print("[SkeletonBinding] Bound %d bones to ragdoll parts" % _bone_to_part.size())
+	print("[SkeletonBinding] Bound %d bones to ragdoll parts (mode=%s)" % [
+		_bone_to_part.size(), "ANIMATED" if mode == Mode.ANIMATED else "RAGDOLL"])
 
 
 ## Switch between animation-driven and physics-driven modes.
@@ -121,6 +126,7 @@ func _sync_ragdoll_to_skeleton() -> void:
 func _build_bone_mapping() -> void:
 	_bone_to_part.clear()
 	var bone_count: int = skeleton.get_bone_count()
+	var unmatched_bones: PackedStringArray = []
 
 	for bone_idx: int in range(bone_count):
 		var bone_name: String = skeleton.get_bone_name(bone_idx)
@@ -137,6 +143,12 @@ func _build_bone_mapping() -> void:
 			var part_name: String = HumanoidRagdollBuilder.BONE_NAME_MAP[bone_name.to_lower()] as String
 			if ragdoll.parts.has(part_name):
 				_bone_to_part[bone_idx] = ragdoll.parts[part_name]
+		else:
+			unmatched_bones.append(bone_name)
+
+	if unmatched_bones.size() > 0:
+		print("[SkeletonBinding] %d unmatched bones: %s" % [
+			unmatched_bones.size(), ", ".join(unmatched_bones)])
 
 
 ## Hide the placeholder debug spheres/capsules since we now have a real mesh.
