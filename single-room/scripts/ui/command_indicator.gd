@@ -88,6 +88,9 @@ func _on_npc_changed(npc: NPCPlaceholder) -> void:
 	# Pause the NPC's autonomous behavior while commanded
 	if npc.behavior != null:
 		npc.behavior.pause()
+	# Notify the brain
+	if npc.brain != null:
+		npc.brain._on_commanded()
 
 
 func _on_command_cleared() -> void:
@@ -99,6 +102,9 @@ func _on_command_cleared() -> void:
 				var npc: NPCPlaceholder = node as NPCPlaceholder
 				if npc.behavior != null:
 					npc.behavior.resume()
+				# Notify the brain
+				if npc.brain != null:
+					npc.brain._on_command_released()
 
 	_label.text = "Commanding: Self"
 	_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.5))

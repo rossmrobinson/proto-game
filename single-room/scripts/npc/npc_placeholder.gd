@@ -1,7 +1,7 @@
 class_name NPCPlaceholder
 extends Node3D
 ## Placeholder NPC that spawns a full humanoid ragdoll.
-## Later this will be replaced with animated Blender models and LLM brain.
+## Brain subsystems: Memory, Attention, Voice, central Brain coordinator.
 
 @export var npc_name: String = "TestNPC"
 @export var body_height: float = 1.75
@@ -12,6 +12,10 @@ var nerve_system: NerveSystem = null
 var character_profile: CharacterProfile = null
 var body_language: BodyLanguageSystem = null
 var behavior: NPCBehavior = null
+var brain: NPCBrain = null
+var memory: NPCMemory = null
+var attention: NPCAttention = null
+var voice_player: NPCVoicePlayer = null
 
 
 func _ready() -> void:
@@ -19,7 +23,7 @@ func _ready() -> void:
 	add_to_group(&"npc")
 
 	ragdoll.ragdoll_built.connect(_on_ragdoll_built)
-	# Spawn NPC subsystems
+	# Spawn NPC subsystems — order matters (brain wires to siblings via deferred)
 	character_profile = CharacterProfile.new()
 	character_profile.name = "CharacterProfile"
 	character_profile.character_name = npc_name
@@ -36,6 +40,24 @@ func _ready() -> void:
 	behavior = NPCBehavior.new()
 	behavior.name = "NPCBehavior"
 	add_child(behavior)
+
+	# Brain subsystems
+	memory = NPCMemory.new()
+	memory.name = "NPCMemory"
+	add_child(memory)
+
+	attention = NPCAttention.new()
+	attention.name = "NPCAttention"
+	add_child(attention)
+
+	voice_player = NPCVoicePlayer.new()
+	voice_player.name = "NPCVoicePlayer"
+	add_child(voice_player)
+
+	# Brain last — it finds siblings via deferred _wire_subsystems()
+	brain = NPCBrain.new()
+	brain.name = "NPCBrain"
+	add_child(brain)
 
 
 func _on_ragdoll_built() -> void:
