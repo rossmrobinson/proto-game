@@ -40,6 +40,8 @@ enum BodyType { MALE, FEMALE, ANDROGYNOUS }
 var parts: Dictionary = {}
 ## All joints created
 var joints: Array[Generic6DOFJoint3D] = []
+## Maps joint key ("parent_to_child") -> Generic6DOFJoint3D for animator lookup
+var joint_map: Dictionary = {}
 
 # ── Proportions (fraction of body_height) ────────────────────────────────────
 # These come from anatomical proportions (roughly based on an ideal 7.5 head model)
@@ -290,10 +292,14 @@ func _build_ragdoll() -> void:
 			Vector3(shoulder_x * 0.1, clavicle.position.y, 0),
 			Vector3(-5, -10, -5), Vector3(15, 10, 5))
 
-		# Clavicle -> Upper Arm (shoulder — wide range)
+		# Clavicle -> Upper Arm (shoulder — wide range, mirrored for left/right)
+		var sh_y_lo: float = -60.0 if side_sign > 0 else -90.0
+		var sh_y_hi: float = 90.0 if side_sign > 0 else 60.0
+		var sh_z_lo: float = -80.0 if side_sign > 0 else -30.0
+		var sh_z_hi: float = 30.0 if side_sign > 0 else 80.0
 		_create_joint(clavicle, upper_arm,
 			Vector3(shoulder_x, clavicle.position.y, 0),
-			Vector3(-90, -60, -80), Vector3(90, 90, 30))
+			Vector3(-90, sh_y_lo, sh_z_lo), Vector3(90, sh_y_hi, sh_z_hi))
 
 		# Upper Arm -> Forearm (elbow — hinge-like)
 		_create_joint(upper_arm, forearm,
@@ -411,6 +417,8 @@ func _create_joint(parent_part: BodyPart, child_part: BodyPart,
 	joint.name = "Joint_%s_to_%s" % [parent_part.part_name, child_part.part_name]
 	joint.position = anchor_pos
 
+	var map_key: String = "%s_to_%s" % [parent_part.part_name, child_part.part_name]
+
 	joint.node_a = parent_part.get_path()
 	joint.node_b = child_part.get_path()
 
@@ -432,6 +440,7 @@ func _create_joint(parent_part: BodyPart, child_part: BodyPart,
 
 	add_child(joint)
 	joints.append(joint)
+	joint_map[map_key] = joint
 
 	# Track adjacency
 	parent_part.connected_parts.append(child_part)
