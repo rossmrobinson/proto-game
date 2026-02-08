@@ -27,7 +27,7 @@ environment = ExtResource("4_env")
 [node name="GreyboxRoom" parent="." instance=ExtResource("1_room")]
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
 
 [node name="NPCPlaceholder" parent="." instance=ExtResource("5_npc")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.0, 0, -0.8)
