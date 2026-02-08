@@ -18,6 +18,10 @@ var _npc_list: Array[NPCPlaceholder] = []
 var _current_npc: NPCPlaceholder = null
 var _overrides: Dictionary = {}  # npc_name → { param → value }
 
+# Phallus tracking: npc instance_id → EquippablePhallus
+var _equipped_phalluses: Dictionary = {}
+var _equip_btn: Button = null
+
 # Slider definitions: [param_name, display, min, max, step]
 const SLIDER_DEFS: Array = [
 	["pain_tolerance", "Pain Tolerance", 0.0, 1.0, 0.05],
@@ -142,6 +146,14 @@ func _build_ui() -> void:
 	save_btn.pressed.connect(_on_save_pressed)
 	btn_row.add_child(save_btn)
 
+	# Equip phallus button
+	_vbox.add_child(HSeparator.new())
+	_equip_btn = Button.new()
+	_equip_btn.text = "Equip Phallus"
+	_equip_btn.add_theme_font_size_override("font_size", 13)
+	_equip_btn.pressed.connect(_on_equip_phallus_pressed)
+	_vbox.add_child(_equip_btn)
+
 
 func _add_slider(param: String, display: String, min_val: float,
 		max_val: float, step: float) -> void:
@@ -188,6 +200,7 @@ func _scan_npcs() -> void:
 			_npc_dropdown.add_item((node as NPCPlaceholder).npc_name)
 	if not _npc_list.is_empty():
 		_select_npc(0)
+	apply_stored_overrides()
 
 
 func _select_npc(idx: int) -> void:
@@ -195,6 +208,7 @@ func _select_npc(idx: int) -> void:
 		return
 	_current_npc = _npc_list[idx]
 	_refresh_sliders()
+	_update_equip_button()
 
 
 func _refresh_sliders() -> void:
@@ -347,3 +361,38 @@ func apply_stored_overrides() -> void:
 			continue
 		if _overrides.has(npc.npc_name):
 			npc.character_profile.apply_overrides(_overrides[npc.npc_name] as Dictionary)
+
+
+# ── Phallus Equip ────────────────────────────────────────────────────────────
+
+func _is_phallus_equipped(npc: NPCPlaceholder) -> bool:
+	return _equipped_phalluses.has(npc.get_instance_id())
+
+
+func _update_equip_button() -> void:
+	if _equip_btn == null or _current_npc == null:
+		return
+	if _is_phallus_equipped(_current_npc):
+		_equip_btn.text = "Unequip Phallus"
+	else:
+		_equip_btn.text = "Equip Phallus"
+
+
+func _on_equip_phallus_pressed() -> void:
+	if _current_npc == null:
+		return
+	var npc_id: int = _current_npc.get_instance_id()
+	if _equipped_phalluses.has(npc_id):
+		# Unequip
+		var toy: EquippablePhallus = _equipped_phalluses[npc_id] as EquippablePhallus
+		toy.unequip()
+		toy.queue_free()
+		_equipped_phalluses.erase(npc_id)
+	else:
+		# Equip
+		var toy: EquippablePhallus = EquippablePhallus.new()
+		toy.name = "EquippedPhallus"
+		_current_npc.add_child(toy)
+		toy.equip(_current_npc)
+		_equipped_phalluses[npc_id] = toy
+	_update_equip_button()
