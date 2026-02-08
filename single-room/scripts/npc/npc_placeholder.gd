@@ -91,6 +91,24 @@ func _on_ragdoll_built() -> void:
 		_load_model()
 
 
+## Called when any body part is grabbed — switch to ragdoll physics.
+func _on_part_grabbed(_part_name: String, _by: Node3D) -> void:
+	if skeleton_binding != null:
+		skeleton_binding.set_mode(SkeletonBinding.Mode.RAGDOLL)
+
+
+## Called when a body part is released. If no parts are held, return to animated.
+func _on_part_released(_part_name: String, _by: Node3D) -> void:
+	# Check if any part is still held
+	for part_key: String in ragdoll.parts:
+		var part: BodyPart = ragdoll.parts[part_key] as BodyPart
+		if part.grabbed_by != null:
+			return
+	# No parts held — return to animated mode so mesh holds pose
+	if skeleton_binding != null:
+		skeleton_binding.set_mode(SkeletonBinding.Mode.ANIMATED)
+
+
 ## Load the skinned mesh from the .blend import and bind its skeleton to the ragdoll.
 func _load_model() -> void:
 	# Godot imports each object in a .blend as a child of the root scene.
@@ -130,6 +148,10 @@ func _load_model() -> void:
 	armature.get_parent().remove_child(armature)
 	scene_root.queue_free()
 	add_child(armature)
+	# Zero out the Blender world position so the mesh aligns with our NPC origin
+	if armature is Node3D:
+		(armature as Node3D).position = Vector3.ZERO
+		(armature as Node3D).rotation = Vector3.ZERO
 
 	# Find the Skeleton3D within the armature subtree
 	var skel: Skeleton3D = _find_skeleton(armature)
@@ -142,6 +164,12 @@ func _load_model() -> void:
 	skeleton_binding.name = "SkeletonBinding"
 	add_child(skeleton_binding)
 	skeleton_binding.bind(skel, ragdoll)
+
+	# Connect grab/release signals so the mesh switches to ragdoll physics when touched
+	for part_key: String in ragdoll.parts:
+		var part: BodyPart = ragdoll.parts[part_key] as BodyPart
+		part.part_grabbed.connect(_on_part_grabbed)
+		part.part_released.connect(_on_part_released)
 
 	print("[NPC] %s model loaded — %d bones bound" % [
 		model_name, skeleton_binding._bone_to_part.size()])

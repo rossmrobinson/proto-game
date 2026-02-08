@@ -74,12 +74,13 @@ func set_mode(p_mode: Mode) -> void:
 	match mode:
 		Mode.ANIMATED:
 			# Clear any bone overrides so animations take control again
-			for bone_idx: int in _bone_to_part:
-				skeleton.clear_bone_pose_all_overrides()
-			# Unfreeze ragdoll parts so they can be repositioned
-			_set_parts_kinematic(false)
+			skeleton.clear_bone_pose_all_overrides()
+			# Snap parts to current bone positions and freeze them
+			_snap_parts_to_bones()
 
 		Mode.RAGDOLL:
+			# Unfreeze ragdoll parts so physics takes over
+			_set_parts_dynamic()
 			# Stop animation player if one exists
 			var anim_player: AnimationPlayer = _find_anim_player()
 			if anim_player != null and anim_player.is_playing():
@@ -199,6 +200,13 @@ func _set_parts_kinematic(kinematic: bool) -> void:
 			part.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 		else:
 			part.freeze = false
+
+
+## Unfreeze all ragdoll parts so physics drives them.
+func _set_parts_dynamic() -> void:
+	for part_key: String in ragdoll.parts:
+		var part: BodyPart = ragdoll.parts[part_key] as BodyPart
+		part.freeze = false
 
 
 ## Find an AnimationPlayer sibling or child of the skeleton's parent.
