@@ -91,22 +91,26 @@ func _on_ragdoll_built() -> void:
 		_load_model()
 
 
-## Called when any body part is grabbed — switch to ragdoll physics.
-func _on_part_grabbed(_part_name: String, _by: Node3D) -> void:
-	if skeleton_binding != null:
-		skeleton_binding.set_mode(SkeletonBinding.Mode.RAGDOLL)
+## Called when any body part is grabbed — unfreeze just that part.
+func _on_part_grabbed(p_part_name: String, _by: Node3D) -> void:
+	if not ragdoll.parts.has(p_part_name):
+		return
+	var part: BodyPart = ragdoll.parts[p_part_name] as BodyPart
+	# Unfreeze so the grab joint can move it while the skeleton drives everything else
+	part.freeze = false
 
 
-## Called when a body part is released. If no parts are held, return to animated.
-func _on_part_released(_part_name: String, _by: Node3D) -> void:
-	# Check if any part is still held
-	for part_key: String in ragdoll.parts:
-		var part: BodyPart = ragdoll.parts[part_key] as BodyPart
-		if part.grabbed_by != null:
-			return
-	# No parts held — return to animated mode so mesh holds pose
-	if skeleton_binding != null:
-		skeleton_binding.set_mode(SkeletonBinding.Mode.ANIMATED)
+## Called when a body part is released — snap it back and re-freeze.
+func _on_part_released(p_part_name: String, _by: Node3D) -> void:
+	if not ragdoll.parts.has(p_part_name):
+		return
+	var part: BodyPart = ragdoll.parts[p_part_name] as BodyPart
+	# Re-freeze so the skeleton takes over again
+	part.freeze = true
+	part.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	part.linear_velocity = Vector3.ZERO
+	part.angular_velocity = Vector3.ZERO
+	# Skeleton sync will snap it back to the bone position on the next frame
 
 
 ## Load the skinned mesh from the .blend import and bind its skeleton to the ragdoll.

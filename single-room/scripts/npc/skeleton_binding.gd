@@ -99,12 +99,14 @@ func _physics_process(_delta: float) -> void:
 
 
 ## ANIMATED mode: skeleton bone transforms → physics body positions.
+## Skips any part currently being grabbed so the player's hand drives it.
 func _sync_skeleton_to_ragdoll() -> void:
 	for bone_idx: int in _bone_to_part:
 		var part: BodyPart = _bone_to_part[bone_idx] as BodyPart
+		# Don't fight the grab joint — let the player move this part freely
+		if part.grabbed_by != null:
+			continue
 		var bone_global: Transform3D = skeleton.global_transform * skeleton.get_bone_global_pose(bone_idx)
-		# Move the physics body to match the bone
-		# Use global_position so the part follows regardless of hierarchy
 		part.global_position = bone_global.origin
 		part.global_basis = bone_global.basis
 
