@@ -483,12 +483,19 @@ Scripts live in `tools/scanners/`:
 | `Cache: Clear Project Cache` | L2 |
 | `Cache: Clear User Data` | user:// full wipe |
 | `Cache: Clear All` | L3 (and L4 if configured) |
+| `Cache: Clear All (Global)` | L3 + global cache |
+| `Cache: Status` | Show cache sizes |
+| `Cache: Prune Logs (7d)` | Delete old logs |
+| `Cache: Clear Global Only` | Global Godot cache only |
+| `Cache: Clear GPU Shader` | GPU shader cache (env var) |
+| `Cache: Clear Nuclear` | L4 + GPU shader |
 
 ### Env Vars (Optional)
 | Var | Purpose |
 |-----|---------|
 | `GODOT_USERDATA_DIR` | Override user data path |
 | `GODOT_GLOBAL_CACHE_DIR` | Enable global cache clearing |
+| `GPU_SHADER_CACHE_DIR` | Enable GPU shader cache clearing |
 
 ### Godot Path Print
 Run `res://tools/cache/print_cache_paths.gd` via the editor Script Run button

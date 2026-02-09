@@ -71,6 +71,69 @@
         "${workspaceFolder}/single-room/tools/cache/clear-all-caches.ps1"
       ],
       "problemMatcher": []
+    },
+    {
+      "label": "Cache: Clear All (Global)",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-File",
+        "${workspaceFolder}/single-room/tools/cache/clear-all-caches.ps1",
+        "-IncludeGlobal"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Cache: Status",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-File",
+        "${workspaceFolder}/single-room/tools/cache/cache-status.ps1"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Cache: Prune Logs (7d)",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-File",
+        "${workspaceFolder}/single-room/tools/cache/prune-logs.ps1",
+        "-Days",
+        "7"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Cache: Clear Global Only",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-File",
+        "${workspaceFolder}/single-room/tools/cache/clear-global-cache.ps1"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Cache: Clear GPU Shader",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-File",
+        "${workspaceFolder}/single-room/tools/cache/clear-gpu-shader-cache.ps1"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Cache: Clear Nuclear",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-File",
+        "${workspaceFolder}/single-room/tools/cache/clear-nuclear.ps1"
+      ],
+      "problemMatcher": []
     }
   ]
 }
