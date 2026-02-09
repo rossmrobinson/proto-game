@@ -740,17 +740,19 @@ func _create_passage_chain(passage_name: String, anchor_part: BodyPart,
 #  COLLISION EXCLUSIONS
 # ──────────────────────────────────────────────────────────────────────────────
 
-## Add collision exceptions between every directly-jointed pair of body parts.
-## Adjacent parts are held together by joints — if they also collide via the
-## physics broadphase they'll jitter violently.  Non-adjacent parts (e.g.
-## hand vs thigh on the same NPC) remain free to collide for posing.
+## Add collision exceptions between ALL body parts in this ragdoll.
+## At 66 parts per NPC, intra-ragdoll collisions cause severe jitter and
+## explosion when parts overlap at spawn. Non-adjacent self-collision
+## (e.g. hand touching own thigh) can be re-enabled later with careful
+## spawn-position validation and per-pair exceptions.
 func _apply_collision_exclusions() -> void:
-	for joint: Generic6DOFJoint3D in joints:
-		var a: BodyPart = get_node_or_null(joint.node_a) as BodyPart
-		var b: BodyPart = get_node_or_null(joint.node_b) as BodyPart
-		if a != null and b != null:
-			a.add_collision_exception_with(b)
-			b.add_collision_exception_with(a)
+	var all_parts: Array[BodyPart] = []
+	for part_name_key: String in parts:
+		all_parts.append(parts[part_name_key] as BodyPart)
+	for i: int in range(all_parts.size()):
+		for j: int in range(i + 1, all_parts.size()):
+			all_parts[i].add_collision_exception_with(all_parts[j])
+			all_parts[j].add_collision_exception_with(all_parts[i])
 
 
 ## Move passage segments to layer 6 (NPC_Internal) so they don't interact
