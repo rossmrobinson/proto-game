@@ -48,15 +48,29 @@ var _ctrl_held: bool = false
 var _pending_tap_time: float = -1.0
 var _kneel_triggered: bool = false
 
-var _target_height: float = 1.8
-var _target_camera_y: float = 0.8
+## Current lerp targets — initialised in _enter_tree to avoid stale-default
+## frames where _physics_process runs before _ready.
+var _target_height: float
+var _target_camera_y: float
+var _initialized: bool = false
 
-@onready var _player: PlayerController = get_parent() as PlayerController
+var _player: PlayerController = null
 var _collision_shape: CollisionShape3D = null
 var _capsule: CapsuleShape3D = null
 
+## Epsilon — stop lerping once within this tolerance to avoid micro-oscillation.
+const _LERP_EPSILON: float = 0.001
+
+
+func _enter_tree() -> void:
+	# Set targets at the earliest possible moment so no physics frame
+	# ever sees the wrong values.
+	_target_height = standing_height
+	_target_camera_y = standing_camera_y
+
 
 func _ready() -> void:
+	_player = get_parent() as PlayerController
 	# Find the player's collision capsule
 	for child: Node in _player.get_children():
 		if child is CollisionShape3D:
@@ -64,8 +78,7 @@ func _ready() -> void:
 			if _collision_shape.shape is CapsuleShape3D:
 				_capsule = _collision_shape.shape as CapsuleShape3D
 			break
-	_target_height = standing_height
-	_target_camera_y = standing_camera_y
+	_initialized = true
 	print("[Posture] Standing height=%.2f camera_y=%.2f" % [standing_height, standing_camera_y])
 
 
@@ -90,6 +103,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if not _initialized:
+		return
+
 	var now: float = Time.get_ticks_msec() / 1000.0
 
 	# Hold detection: if CTRL held past threshold → kneel
@@ -103,16 +119,30 @@ func _physics_process(delta: float) -> void:
 		_execute_single_tap()
 		_pending_tap_time = -1.0
 
-	# Smooth interpolation of collision and camera
-	if _capsule != null:
-		_capsule.height = lerpf(_capsule.height, _target_height, transition_speed * delta)
-		if _collision_shape != null:
-			_collision_shape.position.y = _capsule.height / 2.0
+	# ── Smooth capsule resize — anchor the BOTTOM of the capsule ────────
+	# The capsule's bottom-of-feet must stay at world y=0 during resizes.
+	# old_bottom = collision_shape.position.y - capsule.height / 2
+	# After resize we set collision_shape.position.y so the new bottom
+	# matches the old bottom.  This prevents the solver from pushing the
+	# body downward when the shape shrinks.
+	if _capsule != null and _collision_shape != null:
+		var old_height: float = _capsule.height
+		var new_height: float = lerpf(old_height, _target_height, transition_speed * delta)
+		# Snap when close enough to stop micro-oscillation
+		if absf(new_height - _target_height) < _LERP_EPSILON:
+			new_height = _target_height
+		_capsule.height = new_height
+		# Keep bottom anchored: bottom = shape_y - height/2  →  shape_y = bottom + height/2
+		var old_bottom: float = _collision_shape.position.y - old_height / 2.0
+		_collision_shape.position.y = old_bottom + new_height / 2.0
 
 	if _player.head_pivot != null:
-		_player.head_pivot.position.y = lerpf(
+		var new_cam_y: float = lerpf(
 			_player.head_pivot.position.y, _target_camera_y,
 			transition_speed * delta)
+		if absf(new_cam_y - _target_camera_y) < _LERP_EPSILON:
+			new_cam_y = _target_camera_y
+		_player.head_pivot.position.y = new_cam_y
 
 	# Tell the player controller whether jump and speed are modified
 	_player.set_meta(&"jump_enabled", current_posture == Posture.STANDING)
