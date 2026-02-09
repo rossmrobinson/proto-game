@@ -39,6 +39,11 @@ var _targeting: TargetingSystem = null
 var _player_model: Node3D = null
 ## Frame counter for one-shot diagnostics.
 var _diag_frames: int = 0
+## Fall detector state.
+var _fall_logged_frames: int = 0
+var _was_falling: bool = false
+const _FALL_Y_THRESHOLD: float = -0.15
+const _FALL_LOG_MAX: int = 30
 
 
 func _ready() -> void:
@@ -122,6 +127,24 @@ func _physics_process(delta: float) -> void:
 		var cam_name: String = str(cam.name) if cam != null else "null"
 		print("  head_pivot.y=%.2f  cam=%s  mouse=%d" % [
 			head_pivot.position.y, cam_name, Input.mouse_mode])
+		_print_capsule_state("frame5")
+
+	# ── Fall detector ────────────────────────────────────────────────────
+	var is_falling: bool = global_position.y < _FALL_Y_THRESHOLD
+	if is_falling and not _was_falling:
+		# Onset — print full context
+		print("")
+		print("!!!! FALL DETECTED at frame %d !!!!" % _diag_frames)
+		_print_capsule_state("onset")
+		_fall_logged_frames = 0
+	if is_falling and _fall_logged_frames < _FALL_LOG_MAX:
+		_fall_logged_frames += 1
+		print("[Fall %d] f=%d y=%.4f vy=%.4f floor=%s" % [
+			_fall_logged_frames, _diag_frames,
+			global_position.y, velocity.y, is_on_floor()])
+	if not is_falling and _was_falling:
+		print("[Fall] Recovered at frame %d  pos=%s" % [_diag_frames, global_position])
+	_was_falling = is_falling
 
 
 # ── Movement ─────────────────────────────────────────────────────────────────
@@ -293,6 +316,25 @@ func _collect_and_exclude_bodies(node: Node) -> void:
 		spring_arm.add_excluded_object(co.get_rid())
 	for child: Node in node.get_children():
 		_collect_and_exclude_bodies(child)
+
+
+## Print capsule + posture state for diagnostics.  Tag identifies context.
+func _print_capsule_state(tag: String) -> void:
+	var col_shape: CollisionShape3D = $CollisionShape3D
+	var cap: CapsuleShape3D = col_shape.shape as CapsuleShape3D if col_shape.shape is CapsuleShape3D else null
+	var posture_node: Node = get_node_or_null("PlayerPosture")
+	print("  [%s] pos=%s  vel=%s  on_floor=%s" % [tag, global_position, velocity, is_on_floor()])
+	if cap != null:
+		var bottom: float = col_shape.position.y - cap.height / 2.0
+		print("  [%s] capsule: h=%.4f  r=%.3f  shape_y=%.4f  bottom=%.4f" % [
+			tag, cap.height, cap.radius, col_shape.position.y, bottom])
+	if posture_node != null and posture_node.has_method("get_speed_multiplier"):
+		var p: PlayerPosture = posture_node as PlayerPosture
+		print("  [%s] posture: target_h=%.4f  target_cam=%.4f  state=%d  init=%s" % [
+			tag, p._target_height, p._target_camera_y,
+			p.current_posture, p._initialized])
+	print("  [%s] head_pivot.y=%.4f  gravity=%.2f" % [
+		tag, head_pivot.position.y, _gravity])
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
