@@ -28,9 +28,9 @@ extends Node
 
 ## Maximum linear acceleration (m/s²) a spring can apply to any part.
 ## Prevents light parts (fingers) from getting launched.
-@export var max_spring_accel: float = 20.0
+@export var max_spring_accel: float = 80.0
 ## Maximum angular acceleration (rad/s²) a spring can apply.
-@export var max_angular_accel: float = 40.0
+@export var max_angular_accel: float = 60.0
 ## How long (seconds) to ramp spring strength from 0 → full after spawn.
 @export var spawn_ramp_time: float = 0.4
 ## How many physics frames to keep parts frozen after bind (lets Jolt settle).
@@ -56,7 +56,6 @@ var _spawn_elapsed: float = 0.0
 var _spawn_frames: int = 0
 var _parts_frozen: bool = true
 var _spring_scale: float = 0.0
-var _post_unfreeze_frames: int = 0
 var _npc_name: String = ""
 
 ## If true, placeholder debug meshes on ragdoll parts are hidden
@@ -122,11 +121,6 @@ func _physics_process(delta: float) -> void:
 			_parts_frozen = false
 			_log_part_bounds("post_unfreeze")
 		return
-
-	# Track frames after unfreeze for diagnostics
-	_post_unfreeze_frames += 1
-	if _post_unfreeze_frames <= 10:
-		_log_part_bounds("alive_f%d" % _post_unfreeze_frames)
 
 	# Ramp spring scale from 0 → 1 over spawn_ramp_time
 	if _spawn_elapsed < spawn_ramp_time:

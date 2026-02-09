@@ -37,17 +37,9 @@ var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _targeting: TargetingSystem = null
 ## The loaded player mesh root (if any).
 var _player_model: Node3D = null
-## Frame counter for one-shot diagnostics.
-var _diag_frames: int = 0
-## Fall detector state.
-var _fall_logged_frames: int = 0
-var _was_falling: bool = false
-const _FALL_Y_THRESHOLD: float = -0.15
-const _FALL_LOG_MAX: int = 30
-
 
 func _ready() -> void:
-	print("========== PLAYER READY — BUILD 2026-02-08-B ==========")
+	print("========== PLAYER READY — BUILD 2026-02-08-C ==========")
 	# Force collision settings regardless of .tscn cache
 	collision_mask = 1
 	collision_layer = 2
@@ -90,71 +82,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	# Frame-0 diagnostic: what are the collision settings BEFORE any physics?
-	_diag_frames += 1
-
-	# ── Teleport trap: log position at START of every frame for first 10 frames ──
-	if _diag_frames <= 10:
-		print("[Tick %d] START pos=%s  vel=%s  floor=%s" % [
-			_diag_frames, global_position, velocity, is_on_floor()])
-
-	if _diag_frames == 1:
-		print("[Player] Frame 0 — pre-physics:")
-		print("  pos=%s  collision_layer=%d  collision_mask=%d" % [
-			global_position, collision_layer, collision_mask])
-		# Check all colliders touching us right now
-		var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
-		var shape_query: PhysicsShapeQueryParameters3D = PhysicsShapeQueryParameters3D.new()
-		var col_shape: CollisionShape3D = $CollisionShape3D
-		shape_query.shape = col_shape.shape
-		shape_query.transform = global_transform * col_shape.transform
-		shape_query.collision_mask = 0xFFFFFFFF  # test ALL layers
-		var results: Array[Dictionary] = space.intersect_shape(shape_query, 10)
-		print("  overlapping bodies (%d):" % results.size())
-		for r: Dictionary in results:
-			var col: Object = r["collider"]
-			if col is Node:
-				var n: Node = col as Node
-				var co: CollisionObject3D = col as CollisionObject3D
-				var cl: int = co.collision_layer if co != null else -1
-				print("    %s (layer=%d)" % [n.name, cl])
-
 	_apply_gravity(delta)
 	_handle_jump()
 	_handle_movement(delta)
 	move_and_slide()
-
-	if _diag_frames <= 10:
-		print("[Tick %d] AFTER pos=%s  vel=%s  floor=%s" % [
-			_diag_frames, global_position, velocity, is_on_floor()])
-
-	# One-shot diagnostic at frame 5 (early, after physics has settled)
-	if _diag_frames == 5:
-		var cam: Camera3D = get_active_camera()
-		print("[Player] Diag @ frame 5:")
-		print("  pos=%s  vel=%s  on_floor=%s" % [global_position, velocity, is_on_floor()])
-		print("  collision_mask=%d" % collision_mask)
-		var cam_name: String = str(cam.name) if cam != null else "null"
-		print("  head_pivot.y=%.2f  cam=%s  mouse=%d" % [
-			head_pivot.position.y, cam_name, Input.mouse_mode])
-		_print_capsule_state("frame5")
-
-	# ── Fall detector ────────────────────────────────────────────────────
-	var is_falling: bool = global_position.y < _FALL_Y_THRESHOLD
-	if is_falling and not _was_falling:
-		# Onset — print full context
-		print("")
-		print("!!!! FALL DETECTED at frame %d !!!!" % _diag_frames)
-		_print_capsule_state("onset")
-		_fall_logged_frames = 0
-	if is_falling and _fall_logged_frames < _FALL_LOG_MAX:
-		_fall_logged_frames += 1
-		print("[Fall %d] f=%d y=%.4f vy=%.4f floor=%s" % [
-			_fall_logged_frames, _diag_frames,
-			global_position.y, velocity.y, is_on_floor()])
-	if not is_falling and _was_falling:
-		print("[Fall] Recovered at frame %d  pos=%s" % [_diag_frames, global_position])
-	_was_falling = is_falling
 
 
 # ── Movement ─────────────────────────────────────────────────────────────────
@@ -326,25 +257,6 @@ func _collect_and_exclude_bodies(node: Node) -> void:
 		spring_arm.add_excluded_object(co.get_rid())
 	for child: Node in node.get_children():
 		_collect_and_exclude_bodies(child)
-
-
-## Print capsule + posture state for diagnostics.  Tag identifies context.
-func _print_capsule_state(tag: String) -> void:
-	var col_shape: CollisionShape3D = $CollisionShape3D
-	var cap: CapsuleShape3D = col_shape.shape as CapsuleShape3D if col_shape.shape is CapsuleShape3D else null
-	var posture_node: Node = get_node_or_null("PlayerPosture")
-	print("  [%s] pos=%s  vel=%s  on_floor=%s" % [tag, global_position, velocity, is_on_floor()])
-	if cap != null:
-		var bottom: float = col_shape.position.y - cap.height / 2.0
-		print("  [%s] capsule: h=%.4f  r=%.3f  shape_y=%.4f  bottom=%.4f" % [
-			tag, cap.height, cap.radius, col_shape.position.y, bottom])
-	if posture_node != null and posture_node.has_method("get_speed_multiplier"):
-		var p: PlayerPosture = posture_node as PlayerPosture
-		print("  [%s] posture: target_h=%.4f  target_cam=%.4f  state=%d  init=%s" % [
-			tag, p._target_height, p._target_camera_y,
-			p.current_posture, p._initialized])
-	print("  [%s] head_pivot.y=%.4f  gravity=%.2f" % [
-		tag, head_pivot.position.y, _gravity])
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
