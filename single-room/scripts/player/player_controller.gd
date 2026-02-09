@@ -42,8 +42,11 @@ var _diag_frames: int = 0
 
 
 func _ready() -> void:
+	print("========== PLAYER READY — BUILD 2026-02-08-B ==========")
 	# Force collision mask to Environment-only (layer 1) regardless of .tscn
 	collision_mask = 1
+	collision_layer = 2
+	print("[Player] collision_layer=%d  collision_mask=%d" % [collision_layer, collision_mask])
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_apply_camera_mode()
 	# Cache sibling TargetingSystem for detached-cursor routing
