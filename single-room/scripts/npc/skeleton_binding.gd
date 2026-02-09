@@ -245,12 +245,74 @@ func _snap_parts_to_bones() -> void:
 		# (unfreeze happens later via spawn ramp)
 
 
-## Cache the skeleton rest pose at bind time.
-## These are the stable targets springs pull toward — never overwritten.
+## Cache the skeleton rest pose at bind time, then adjust from T-pose to
+## a natural arms-at-sides idle.  These targets are never overwritten.
 func _cache_rest_poses() -> void:
 	_rest_poses.clear()
 	for bone_idx: int in _bone_to_part:
 		_rest_poses[bone_idx] = skeleton.get_bone_global_pose(bone_idx)
+	_adjust_rest_to_idle()
+
+
+## Rotate the arm chains from T-pose (arms horizontal) to a natural idle
+## (arms hanging at sides).  Operates on the cached rest poses so the actual
+## skeleton data is never touched.
+func _adjust_rest_to_idle() -> void:
+	# Bone names that form each arm chain — upper arm is the root of rotation.
+	var left_arm_chain: PackedStringArray = [
+		"left_upper_arm", "left_forearm", "left_hand",
+		"left_thumb_01", "left_thumb_02", "left_thumb_03",
+		"left_index_01", "left_index_02", "left_index_03",
+		"left_middle_01", "left_middle_02", "left_middle_03",
+		"left_ring_01", "left_ring_02", "left_ring_03",
+		"left_pinky_01", "left_pinky_02", "left_pinky_03",
+	]
+	var right_arm_chain: PackedStringArray = [
+		"right_upper_arm", "right_forearm", "right_hand",
+		"right_thumb_01", "right_thumb_02", "right_thumb_03",
+		"right_index_01", "right_index_02", "right_index_03",
+		"right_middle_01", "right_middle_02", "right_middle_03",
+		"right_ring_01", "right_ring_02", "right_ring_03",
+		"right_pinky_01", "right_pinky_02", "right_pinky_03",
+	]
+
+	# Build part_name → bone_idx reverse lookup for this skeleton
+	var name_to_bone: Dictionary = {}
+	for bone_idx: int in _bone_to_part:
+		var part: BodyPart = _bone_to_part[bone_idx] as BodyPart
+		name_to_bone[part.part_name] = bone_idx
+
+	# Find the upper arm bone pose to determine the pivot point for each side
+	_rotate_arm_chain(left_arm_chain, name_to_bone, -1.0)
+	_rotate_arm_chain(right_arm_chain, name_to_bone, 1.0)
+
+
+## Rotate an arm chain's rest poses downward around the shoulder pivot.
+## `side_sign` is -1 for left, +1 for right (determines rotation direction).
+func _rotate_arm_chain(chain: PackedStringArray, name_to_bone: Dictionary,
+		side_sign: float) -> void:
+	if not name_to_bone.has(chain[0]):
+		return
+	var shoulder_bone_idx: int = name_to_bone[chain[0]] as int
+	var shoulder_pose: Transform3D = _rest_poses[shoulder_bone_idx]
+	var pivot: Vector3 = shoulder_pose.origin
+
+	# Rotate 75° around forward axis (Z) — arms go from horizontal to ~15° from vertical.
+	# Left arm rotates +Z, right arm rotates -Z (toward the body).
+	var angle: float = deg_to_rad(75.0) * side_sign
+	var rot: Basis = Basis(Vector3.FORWARD, angle)
+
+	for part_name: String in chain:
+		if not name_to_bone.has(part_name):
+			continue
+		var bone_idx: int = name_to_bone[part_name] as int
+		var pose: Transform3D = _rest_poses[bone_idx]
+		# Rotate position around shoulder pivot
+		var offset: Vector3 = pose.origin - pivot
+		var new_origin: Vector3 = pivot + rot * offset
+		# Rotate the bone's own orientation too
+		var new_basis: Basis = rot * pose.basis
+		_rest_poses[bone_idx] = Transform3D(new_basis, new_origin)
 
 
 func _unfreeze_all_parts() -> void:
