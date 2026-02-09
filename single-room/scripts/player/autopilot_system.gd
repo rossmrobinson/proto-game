@@ -8,7 +8,6 @@ extends Node
 
 signal autopilot_started(bank_name: String, sequence_name: String)
 signal autopilot_stopped()
-signal bank_changed(new_bank: String)
 
 ## An animation bank is a named collection of looping sequences.
 ## Each sequence is an Array of pose names played in order.

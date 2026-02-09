@@ -32,9 +32,9 @@ func _process(_delta: float) -> void:
 	var static_mem: float = OS.get_static_memory_usage() / 1048576.0
 	
 	# Object and physics stats
-	var object_count: int = Performance.get_monitor(Performance.OBJECT_COUNT)
-	var node_count: int = Performance.get_monitor(Performance.OBJECT_NODE_COUNT)
-	var orphan_count: int = Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)
+	var object_count: int = int(Performance.get_monitor(Performance.OBJECT_COUNT))
+	var node_count: int = int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+	var orphan_count: int = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	
 	# Render stats  
 	var draw_calls: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))

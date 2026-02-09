@@ -43,10 +43,13 @@ var _diag_frames: int = 0
 
 func _ready() -> void:
 	print("========== PLAYER READY — BUILD 2026-02-08-B ==========")
-	# Force collision mask to Environment-only (layer 1) regardless of .tscn
+	# Force collision settings regardless of .tscn cache
 	collision_mask = 1
 	collision_layer = 2
-	print("[Player] collision_layer=%d  collision_mask=%d" % [collision_layer, collision_mask])
+	# Force FPS camera cull_mask: all layers EXCEPT layer 2 (player body)
+	camera_fps.cull_mask = 0xFFFFF & ~(1 << 1)  # 1048573
+	print("[Player] collision_layer=%d  collision_mask=%d  fps_cull=%d" % [
+		collision_layer, collision_mask, camera_fps.cull_mask])
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_apply_camera_mode()
 	# Cache sibling TargetingSystem for detached-cursor routing
@@ -116,10 +119,9 @@ func _physics_process(delta: float) -> void:
 		print("[Player] Diag @ frame 5:")
 		print("  pos=%s  vel=%s  on_floor=%s" % [global_position, velocity, is_on_floor()])
 		print("  collision_mask=%d" % collision_mask)
+		var cam_name: String = str(cam.name) if cam != null else "null"
 		print("  head_pivot.y=%.2f  cam=%s  mouse=%d" % [
-			head_pivot.position.y,
-			cam.name if cam != null else "null",
-			Input.mouse_mode])
+			head_pivot.position.y, cam_name, Input.mouse_mode])
 
 
 # ── Movement ─────────────────────────────────────────────────────────────────

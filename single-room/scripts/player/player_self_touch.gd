@@ -36,13 +36,6 @@ func _ready() -> void:
 
 
 func _physics_process(_delta: float) -> void:
-	# Keep zones positioned relative to the player
-	for zone_name: String in _zones.keys():
-		var zone: PlayerSelfTouchZone = _zones[zone_name] as PlayerSelfTouchZone
-		# The zone is a child of this Node3D which is a child of player,
-		# so local transforms are already relative. Nothing to update unless
-		# posture changes — handled below.
-
 	# Adjust genitals zone height based on posture
 	var posture_node: Node = null
 	for sibling: Node in _player.get_children():
@@ -105,7 +98,7 @@ func _create_zone(zone_name: String, disp_name: String,
 	zone.self_released.connect(_on_zone_released)
 
 
-func _on_zone_touched(zone_name: String, hand: int) -> void:
+func _on_zone_touched(zone_name: String, _hand: int) -> void:
 	var zone: PlayerSelfTouchZone = _zones.get(zone_name, null) as PlayerSelfTouchZone
 	if zone == null:
 		return

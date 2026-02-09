@@ -98,7 +98,7 @@ func _pick_behavior() -> void:
 func _register_defaults() -> void:
 	# Simple placeholder behaviors that just print — will be replaced with
 	# actual pose/animation calls once the ragdoll animator is wired up.
-	register_behavior("idle", func(npc: NPCPlaceholder) -> void:
+	register_behavior("idle", func(_npc: NPCPlaceholder) -> void:
 		# Do nothing visible — just stand there
 		pass
 	)

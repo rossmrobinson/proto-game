@@ -183,7 +183,7 @@ func _update_player_distance() -> void:
 
 func _update_proximity_events() -> void:
 	var was_in_range: bool = player_in_range
-	var was_close: bool = player_close
+	var _was_close: bool = player_close
 
 	player_in_range = player_distance <= awareness_radius
 	player_close = player_distance <= close_radius

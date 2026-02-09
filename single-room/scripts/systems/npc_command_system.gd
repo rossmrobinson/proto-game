@@ -26,8 +26,6 @@ var _npc_list: Array[NPCPlaceholder] = []
 ## Per-NPC autonomy flag.  Key = NPC instance-id, Value = bool.
 var _autonomy: Dictionary = {}
 
-@onready var _player: PlayerController = get_parent() as PlayerController
-
 
 func _ready() -> void:
 	# Defer NPC scan so all scene children are ready.
