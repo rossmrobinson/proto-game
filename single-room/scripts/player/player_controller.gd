@@ -92,6 +92,12 @@ func _unhandled_input(event: InputEvent) -> void:
 func _physics_process(delta: float) -> void:
 	# Frame-0 diagnostic: what are the collision settings BEFORE any physics?
 	_diag_frames += 1
+
+	# ── Teleport trap: log position at START of every frame for first 10 frames ──
+	if _diag_frames <= 10:
+		print("[Tick %d] START pos=%s  vel=%s  floor=%s" % [
+			_diag_frames, global_position, velocity, is_on_floor()])
+
 	if _diag_frames == 1:
 		print("[Player] Frame 0 — pre-physics:")
 		print("  pos=%s  collision_layer=%d  collision_mask=%d" % [
@@ -117,6 +123,10 @@ func _physics_process(delta: float) -> void:
 	_handle_jump()
 	_handle_movement(delta)
 	move_and_slide()
+
+	if _diag_frames <= 10:
+		print("[Tick %d] AFTER pos=%s  vel=%s  floor=%s" % [
+			_diag_frames, global_position, velocity, is_on_floor()])
 
 	# One-shot diagnostic at frame 5 (early, after physics has settled)
 	if _diag_frames == 5:
