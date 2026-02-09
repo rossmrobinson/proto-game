@@ -2,13 +2,13 @@ class_name SkeletonBinding
 extends Node
 ## Active-ragdoll skeleton binding.
 ##
-## Physics bodies are ALWAYS dynamic (never frozen). Spring forces push each
-## part toward its skeleton bone pose. Grabbed parts have weaker springs so the
-## player can pull them. When every part is free, the NPC holds its idle pose
-## with a natural, slightly alive feel.
+## Spring forces push each part toward a cached REST POSE (captured at bind
+## time). Grabbed parts have weaker springs so the player can pull them.
+## Forces are clamped by mass to prevent light parts (fingers) from exploding.
 ##
 ## The skeleton is written back from physics every frame so the skinned mesh
-## follows the ragdoll, not the other way around.
+## follows the ragdoll. Writeback does NOT affect spring targets — those use
+## the cached rest poses for stability.
 ##
 ## Uses HumanoidRagdollBuilder.BONE_NAME_MAP for name resolution.
 
@@ -26,6 +26,11 @@ extends Node
 ## Lower = easier to pull away from pose.
 @export_range(0.0, 1.0) var grabbed_spring_ratio: float = 0.05
 
+## Maximum linear acceleration (m/s²) a spring can apply to any part.
+## Prevents light parts (fingers) from getting launched.
+@export var max_spring_accel: float = 20.0
+## Maximum angular acceleration (rad/s²) a spring can apply.
+@export var max_angular_accel: float = 40.0
 ## How long (seconds) to ramp spring strength from 0 → full after spawn.
 @export var spawn_ramp_time: float = 0.4
 ## How many physics frames to keep parts frozen after bind (lets Jolt settle).
@@ -41,6 +46,10 @@ var ragdoll: HumanoidRagdollBuilder = null
 
 ## Cached mapping: bone_idx (int) → BodyPart node.
 var _bone_to_part: Dictionary = {}
+
+## Cached rest-pose transforms: bone_idx → Transform3D (skeleton-local).
+## Springs pull toward these stable poses, NOT the writeback-overwritten skeleton.
+var _rest_poses: Dictionary = {}
 
 ## Spawn-ramp state.
 var _spawn_elapsed: float = 0.0
@@ -72,6 +81,10 @@ func bind(p_skeleton: Skeleton3D, p_ragdoll: HumanoidRagdollBuilder) -> void:
 	HumanoidRagdollBuilder._init_reverse_bone_map()
 
 	_build_bone_mapping()
+
+	# Cache rest poses BEFORE any writeback corrupts them.
+	# Springs will always pull toward these stable targets.
+	_cache_rest_poses()
 
 	# Teleport parts to bone positions before springs kick in
 	_snap_parts_to_bones()
@@ -128,11 +141,14 @@ func _physics_process(delta: float) -> void:
 
 ## ── Spring Forces ───────────────────────────────────────────────────────────
 
-## Apply PD-controller spring forces pushing each part toward its bone pose.
+## Apply PD-controller spring forces pushing each part toward its rest pose.
+## Uses cached rest poses (not live skeleton) so writeback doesn't corrupt targets.
+## Forces are clamped by mass to prevent light parts (fingers) from exploding.
 func _apply_spring_forces(_delta: float) -> void:
 	for bone_idx: int in _bone_to_part:
 		var part: BodyPart = _bone_to_part[bone_idx] as BodyPart
-		var bone_global: Transform3D = skeleton.global_transform * skeleton.get_bone_global_pose(bone_idx)
+		# Use cached rest pose — immune to writeback corruption
+		var bone_global: Transform3D = skeleton.global_transform * _rest_poses[bone_idx]
 
 		# Weaken springs on grabbed parts so they yield to the player
 		var stiff_mult: float = grabbed_spring_ratio if part.grabbed_by != null else 1.0
@@ -142,6 +158,10 @@ func _apply_spring_forces(_delta: float) -> void:
 		var displacement: Vector3 = bone_global.origin - part.global_position
 		var force: Vector3 = displacement * spring_stiffness * stiff_mult
 		force -= part.linear_velocity * spring_damping * stiff_mult
+		# Clamp by mass to prevent extreme acceleration on light parts
+		var max_force: float = max_spring_accel * part.mass
+		if force.length_squared() > max_force * max_force:
+			force = force.limit_length(max_force)
 		part.apply_central_force(force)
 
 		# ── Rotation spring ──────────────────────────────────────────────
@@ -161,6 +181,10 @@ func _apply_spring_forces(_delta: float) -> void:
 				angle -= TAU
 			var torque: Vector3 = axis * angle * angular_stiffness * stiff_mult
 			torque -= part.angular_velocity * angular_damping * stiff_mult
+			# Clamp torque by mass to prevent spin explosions on light parts
+			var max_torque: float = max_angular_accel * part.mass
+			if torque.length_squared() > max_torque * max_torque:
+				torque = torque.limit_length(max_torque)
 			part.apply_torque(torque)
 
 
@@ -225,6 +249,14 @@ func _snap_parts_to_bones() -> void:
 		part.angular_velocity = Vector3.ZERO
 		# Keep dynamic — springs hold the pose, not kinematic freeze
 		# (unfreeze happens later via spawn ramp)
+
+
+## Cache the skeleton rest pose at bind time.
+## These are the stable targets springs pull toward — never overwritten.
+func _cache_rest_poses() -> void:
+	_rest_poses.clear()
+	for bone_idx: int in _bone_to_part:
+		_rest_poses[bone_idx] = skeleton.get_bone_global_pose(bone_idx)
 
 
 func _unfreeze_all_parts() -> void:
