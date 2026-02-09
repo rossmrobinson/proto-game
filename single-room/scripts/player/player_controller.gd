@@ -42,6 +42,8 @@ var _diag_frames: int = 0
 
 
 func _ready() -> void:
+	# Force collision mask to Environment-only (layer 1) regardless of .tscn
+	collision_mask = 1
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_apply_camera_mode()
 	# Cache sibling TargetingSystem for detached-cursor routing

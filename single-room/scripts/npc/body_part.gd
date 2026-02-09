@@ -67,9 +67,9 @@ func _ready() -> void:
 			if child.has_method(&"receive_touch"):
 				_nerve_system = child
 				break
-	# Collide with environment, player, other NPCs, interactables, soft tissue
+	# Collide with environment, other NPCs, interactables, soft tissue
+	# Do NOT include layer 2 (Player) — NPC parts must not push the player
 	set_collision_mask_value(1, true)
-	set_collision_mask_value(2, true)
 	set_collision_mask_value(3, true)
 	set_collision_mask_value(4, true)
 	set_collision_mask_value(5, true)  # NPC_SoftTissue
