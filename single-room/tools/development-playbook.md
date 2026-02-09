@@ -4,6 +4,24 @@
 
 ---
 
+## 0. Copilot Rules (Opus)
+
+### Ross Accessibility
+- Keep responses short and scannable (tables, bullets). Avoid paragraphs.
+- Do the work first. Explain only if asked.
+
+### Safety + Version Discipline
+- Do not cite engine or tool versions without verifying in-project.
+- Do not add hardcoded ports, URLs, or magic numbers outside centralized config.
+
+### Editing Discipline
+- No spaces in file/folder names. Follow naming table in section 7.
+- Use GDScript 4.6 syntax, strict typing everywhere.
+- Run relevant scanners after edits and fix all warnings.
+- Long tasks run in background terminals.
+
+---
+
 ## 1. Current State Summary
 
 ### What Works
@@ -26,6 +44,10 @@
 2. **FPS camera grey** — camera at Y=1.82 sits inside Player1 head mesh
 3. **TPS camera only tilts** — no yaw rotation visible; model faces away
 4. **Player model on layer 2 but FPS still grey** — `_set_mesh_layers()` may not be reaching all MeshInstance3D children (check imported scene tree depth)
+
+### Recent Fixes (Do Not Regress)
+1. **Ragdoll spawn stability** — freeze parts, align to bones for 3 frames, ramp springs over 0.4s, raise NPC root to Y=0.15
+2. **Self-collision explosion** — all same-NPC body parts mutually excluded from collisions
 
 ---
 
@@ -128,7 +150,7 @@ CameraTPS `cull_mask` = default (all layers).
 ## 5. Active Ragdoll Architecture
 
 ### How It Works
-- Every NPC `BodyPart` (RigidBody3D) is **always dynamic, never frozen**
+- Every NPC `BodyPart` (RigidBody3D) is dynamic after spawn (frozen only during initial settle)
 - `SkeletonBinding` applies PD-controller spring forces every `_physics_process`:
   - **Position spring:** pulls part toward skeleton bone position
   - **Rotation spring:** twists part toward skeleton bone orientation
@@ -153,6 +175,14 @@ Godot's built-in `PhysicalBoneSimulator3D` + `PhysicalBone3D` system is simpler 
 - Built-in system is designed for "toggle ragdoll on death" — not always-on active ragdoll
 
 **Decision: Keep custom active ragdoll.** Re-evaluate only if Jolt physics performance becomes an issue.
+
+### Ragdoll Spawn Stability Playbook (MANDATORY)
+1. **Build parts, then freeze**: set `FREEZE_MODE_KINEMATIC` on all parts after creation.
+2. **Align to bones for 3 frames**: snap each part to its target bone pose while frozen.
+3. **Unfreeze after settle**: unfreeze on frame 3; keep springs off during freeze.
+4. **Ramp springs**: scale stiffness from 0 to full over 0.4s.
+5. **Spawn above floor**: NPC root Y >= 0.15 to clear floor surface.
+6. **Delay inter-NPC collisions**: mask out other NPC layers for 0.2s, then restore.
 
 ---
 
@@ -333,3 +363,58 @@ When something doesn't work, check in this order:
 6. **Node paths** — do `@onready` references resolve? (null = scene structure mismatch)
 7. **Signal connections** — is the signal connected? Is the handler receiving?
 8. **Transform hierarchy** — is a parent's rotation/scale affecting children unexpectedly?
+
+---
+
+## 12. Player Collision + Posture Pitfalls
+
+### Capsule Resize Sink Bug
+Symptom: `is_on_floor()` true but player slowly sinks.
+
+Root cause: `PlayerPosture` lerps capsule height toward stale defaults for a few frames before `_ready()` sets targets.
+
+Fix: initialize `_target_height` and `_target_camera_y` before first physics tick or guard `_physics_process` until initialized.
+
+### Dynamic Capsule Resize Rules
+1. Keep capsule bottom at constant world Y when changing height.
+2. Apply resize before `move_and_slide()` each frame.
+3. Avoid oscillating lerps; snap when within epsilon.
+4. Use `floor_snap_length` when shrinking to prevent micro-penetration.
+
+---
+
+## 13. Ragdoll Debug Checklist
+
+### Fast Triage (Run in Order)
+1. **Spawn Y**: NPC root Y >= 0.15 and no body part intersects floor at frame 0.
+2. **Freeze settle**: parts frozen for 3 physics frames while snapped to bone pose.
+3. **Spring ramp**: stiffness ramps 0 -> full over 0.4s.
+4. **Self-collision**: verify all 66 parts mutually excluded.
+5. **Inter-NPC collisions**: temporarily disable other NPC layers for first 0.2s.
+
+### Telemetry to Capture (Print or Debug Overlay)
+- Part count, joint count, and exceptions count
+- Max penetration depth at spawn
+- Max bone offset at snap, unfreeze, and first 10 frames
+- Max linear and angular velocity in first 10 frames
+- Any part with `sleeping = false` while frozen (should not happen)
+
+### Expected Healthy Signals
+- Max bone offset <= 0.02m at unfreeze
+- Max linear velocity < 2.0 m/s in first 10 frames
+- No spikes in angular velocity > 10 rad/s
+- No part below floor plane at unfreeze
+
+### Common Root Causes
+1. **Spawn overlap**: any part starts below floor or inside other NPC.
+2. **Mismatched bone pose**: alignment uses wrong bone or wrong transform space.
+3. **Joint anchor mismatch**: joint frames set before parts are placed.
+4. **Spring too stiff early**: ramp not applied or ramp duration too short.
+5. **Layer/mask reset**: `body_part._ready()` overwrites settings post-build.
+
+### Fix Ladder
+1. Raise spawn Y and re-snap for 3 frames.
+2. Confirm alignment uses bone global pose, not local.
+3. Rebuild joints after snap (or re-set joint frames after snap).
+4. Increase ramp to 0.6s and clamp max force.
+5. Remove any per-part `_ready()` collision changes; keep it in builder.
