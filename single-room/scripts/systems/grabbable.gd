@@ -113,7 +113,7 @@ func push_from(source_pos: Vector3, force: float) -> void:
 
 
 ## Apply a pull toward a target position.
-func pull_toward(target_pos: Vector3, force: float, delta: float) -> void:
+func pull_toward(target_pos: Vector3, force: float, _delta: float) -> void:
 	var dir: Vector3 = (target_pos - global_position).normalized()
 	var dist: float = global_position.distance_to(target_pos)
 	apply_central_force(dir * force * minf(dist, 3.0))
