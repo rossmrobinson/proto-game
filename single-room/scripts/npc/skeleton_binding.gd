@@ -1,12 +1,15 @@
 class_name SkeletonBinding
 extends Node
-## Active-ragdoll skeleton binding — MOTOR-DRIVEN architecture.
+## Active-ragdoll skeleton binding — TORQUE-DRIVEN PD controller.
 ##
-## Instead of applying external forces (which fight the constraint solver and
-## cause jitter), this drives each joint's angular motor to reach a target
-## velocity proportional to the pose error. Motors are solved INSIDE the
-## constraint solver simultaneously with joint limits — zero energy injection
-## → zero jitter.
+## Three systems keep the ragdoll upright:
+## 1. Per-part gravity compensation — each part cancels its own weight so the
+##    joint chain doesn't collapse under gravity.
+## 2. Pelvis position spring — linear PD holds the root body at target height.
+## 3. Orientation PD torques — each joint applies corrective torque toward its
+##    rest-pose relative rotation; pelvis uses absolute world-space target.
+##
+## The pelvis (root) uses ABSOLUTE world-space orientation targeting.
 ##
 ## The skeleton writeback runs in _process (not _physics_process) so it reads
 ## the interpolated visual position from Godot's physics interpolation,
@@ -14,16 +17,24 @@ extends Node
 
 ## ── Tuning ──────────────────────────────────────────────────────────────────
 
-## Motor gain (1/s). Higher = faster convergence to rest pose.
-## Angular target velocity = axis * angle * motor_gain.
-@export var motor_gain: float = 20.0
-## Damping gain for relative angular velocity (D-term of PD controller).
-## Resists relative spin between parent and child to prevent overshoot.
-@export var motor_damping: float = 0.8
-## Motor torque limit multiplier for grabbed parts (0-1).
+## PD stiffness (N·m/rad). Higher = stronger corrective torque toward rest pose.
+@export var motor_stiffness: float = 200.0
+## PD damping (N·m·s/rad). Resists relative angular velocity to prevent overshoot.
+@export var motor_damping: float = 10.0
+## Maximum torque magnitude (N·m) per part. Prevents instability on large errors.
+@export var max_torque: float = 500.0
+## Position PD stiffness (N/m) for pelvis root body. Holds it at target height.
+@export var position_stiffness: float = 800.0
+## Position PD damping (N·s/m) for pelvis. Prevents vertical bounce.
+@export var position_damping: float = 60.0
+## Fraction of gravity to compensate per part (1.0 = full anti-gravity).
+## Each part applies an upward force equal to its weight * this value,
+## so joints don't need to bear gravitational load through the chain.
+@export_range(0.0, 1.0) var gravity_compensation: float = 1.0
+## Torque multiplier for grabbed parts (0-1).
 ## Lower = easier to pull away from pose.
 @export_range(0.0, 1.0) var grabbed_motor_ratio: float = 0.05
-## How long (seconds) to ramp motor strength from 0 → full after spawn.
+## How long (seconds) to ramp torque strength from 0 -> full after spawn.
 @export var spawn_ramp_time: float = 0.0
 ## How many physics frames to keep parts frozen after bind (lets Jolt settle).
 @export var spawn_freeze_frames: int = 10
@@ -61,6 +72,10 @@ var _spawn_frames: int = 0
 var _parts_frozen: bool = true
 var _motor_scale: float = 0.0
 var _npc_name: String = ""
+var _pelvis_bone_idx: int = -1
+var _pelvis_target_pos: Vector3 = Vector3.ZERO
+var _gravity_vector: Vector3 = Vector3.ZERO
+var _diag_frames: int = 0
 
 ## If true, placeholder debug meshes on ragdoll parts are hidden
 ## (because the real skinned mesh is visible instead).
@@ -91,8 +106,17 @@ func bind(p_skeleton: Skeleton3D, p_ragdoll: HumanoidRagdollBuilder) -> void:
 	# Motors will always drive toward these stable targets.
 	_cache_rest_poses()
 
+	# Cache gravity vector from project settings
+	_gravity_vector = Vector3(0.0, -ProjectSettings.get_setting("physics/3d/default_gravity", 9.8), 0.0)
+
 	# Teleport parts to bone positions before motors kick in
 	_snap_parts_to_bones()
+
+	# Cache pelvis world-space target position for position spring
+	if _pelvis_bone_idx >= 0 and _bone_to_part.has(_pelvis_bone_idx):
+		var pelvis_bone_global: Transform3D = skeleton.global_transform * _rest_poses[_pelvis_bone_idx]
+		_pelvis_target_pos = pelvis_bone_global.origin
+		print("[SkeletonBinding] Pelvis target pos: %s" % str(_pelvis_target_pos))
 
 	# Cache NPC name for diagnostics
 	var npc_owner: Node = ragdoll.get_parent()
@@ -109,8 +133,9 @@ func bind(p_skeleton: Skeleton3D, p_ragdoll: HumanoidRagdollBuilder) -> void:
 
 	set_physics_process(true)
 	set_process(true)
-	print("[SkeletonBinding] Motor-driven ragdoll bound — %d bones, %d motor joints, gain=%.1f" % [
-		_bone_to_part.size(), _bone_to_joint.size(), motor_gain])
+	print("[SkeletonBinding] Torque PD ragdoll bound — %d bones, %d joints, Kp=%.0f Kd=%.1f grav_comp=%.0f%%" % [
+		_bone_to_part.size(), _bone_to_joint.size(), motor_stiffness, motor_damping,
+		gravity_compensation * 100.0])
 
 
 func _physics_process(delta: float) -> void:
@@ -138,6 +163,11 @@ func _physics_process(delta: float) -> void:
 
 	_update_motor_targets()
 
+	# Diagnostic: log first 30 frames after unfreeze (every 10th frame)
+	_diag_frames += 1
+	if _diag_frames <= 30 and _diag_frames % 10 == 0:
+		_log_part_bounds("dynamic_frame_%d" % _diag_frames)
+
 
 ## Writeback runs in _process (render frame), reading interpolated transforms
 ## from Godot's physics interpolation for smooth motion.
@@ -147,13 +177,31 @@ func _process(_delta: float) -> void:
 	_write_skeleton_from_physics()
 
 
-## ── Motor Targets ───────────────────────────────────────────────────────────
+## ── Corrective Torques ──────────────────────────────────────────────────────
 
-## Set each joint's angular motor target velocity so parts converge to rest pose.
-## Uses RELATIVE rotation error (child vs parent) — each motor only corrects its
-## own joint, preventing ancestor-error fighting that causes violent thrashing.
-## PD controller: P = error * gain, D = -relative_angular_vel * damping.
-func _update_motor_targets() -> void:
+## Apply corrective torques via apply_torque() — works in world space,
+## no joint-frame ambiguity. Each joint computes RELATIVE rotation error
+## (child vs parent), pelvis uses ABSOLUTE world-space target.
+func _update_motor_targets() -> void:	# ── Per-part gravity compensation ───────────────────────────────────
+	# Each part cancels its own weight so the joint chain doesn't collapse
+	# under gravity. Torques then only need to handle orientation.
+	if gravity_compensation > 0.0:
+		var anti_grav: Vector3 = -_gravity_vector * gravity_compensation
+		for bone_idx: int in _bone_to_part:
+			var gpart: BodyPart = _bone_to_part[bone_idx] as BodyPart
+			gpart.apply_central_force(anti_grav * gpart.mass)
+
+	# ── Pelvis position spring (linear PD) ────────────────────────────
+	# Holds the root body at its target world position.
+	if _pelvis_bone_idx >= 0 and _bone_to_part.has(_pelvis_bone_idx):
+		var pelvis_pos: BodyPart = _bone_to_part[_pelvis_bone_idx] as BodyPart
+		var pos_error: Vector3 = _pelvis_target_pos - pelvis_pos.global_position
+		var pos_force: Vector3 = pos_error * position_stiffness - pelvis_pos.linear_velocity * position_damping
+		pos_force *= _motor_scale
+		if pelvis_pos.grabbed_by != null:
+			pos_force *= grabbed_motor_ratio
+		pelvis_pos.apply_central_force(pos_force)
+	# ── Joint PD torques (relative rotation) ────────────────────────────
 	for bone_idx: int in _bone_to_joint:
 		var joint: Generic6DOFJoint3D = _bone_to_joint[bone_idx] as Generic6DOFJoint3D
 		var part: BodyPart = _bone_to_part[bone_idx] as BodyPart
@@ -166,45 +214,71 @@ func _update_motor_targets() -> void:
 		# Quaternion difference: how far is the child from the target?
 		var current_quat: Quaternion = part.global_basis.get_rotation_quaternion()
 		var diff: Quaternion = target_quat * current_quat.inverse()
-		# Ensure shortest arc
 		if diff.w < 0.0:
 			diff = -diff
 
 		var axis: Vector3 = Vector3(diff.x, diff.y, diff.z)
 		var sin_half: float = axis.length()
 
-		# P-term: angular velocity proportional to rotation error
-		var target_vel: Vector3 = Vector3.ZERO
+		# P-term: corrective torque proportional to angle error
+		var torque: Vector3 = Vector3.ZERO
 		if sin_half > 0.001:
 			axis = axis / sin_half
 			var angle: float = 2.0 * atan2(sin_half, diff.w)
 			if angle > PI:
 				angle -= TAU
-			target_vel = axis * angle * motor_gain
+			torque = axis * angle * motor_stiffness
 
 		# D-term: damp RELATIVE angular velocity (child vs parent)
-		var relative_ang_vel: Vector3 = part.angular_velocity - parent_part.angular_velocity
-		target_vel -= relative_ang_vel * motor_damping
+		var rel_ang_vel: Vector3 = part.angular_velocity - parent_part.angular_velocity
+		torque -= rel_ang_vel * motor_damping
 
 		# Scale by spawn ramp
-		target_vel *= _motor_scale
+		torque *= _motor_scale
 
-		# Convert world-space velocity to joint-local axes.
-		var joint_basis_inv: Basis = joint.global_basis.inverse()
-		var local_vel: Vector3 = joint_basis_inv * target_vel
+		# Clamp torque to prevent instability
+		var mag: float = torque.length()
+		if mag > max_torque:
+			torque = torque * (max_torque / mag)
 
-		# Reduce motor force limit when grabbed (instead of reducing velocity)
-		var force_limit: float = HumanoidRagdollBuilder.MOTOR_FORCE_LIMIT
+		# Reduce torque when grabbed
 		if part.grabbed_by != null:
-			force_limit *= grabbed_motor_ratio
+			torque *= grabbed_motor_ratio
 
-		# Set motor target velocity and force limit per axis
-		joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_TARGET_VELOCITY, local_vel.x)
-		joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_TARGET_VELOCITY, local_vel.y)
-		joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_TARGET_VELOCITY, local_vel.z)
-		joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_FORCE_LIMIT, force_limit)
-		joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_FORCE_LIMIT, force_limit)
-		joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_FORCE_LIMIT, force_limit)
+		part.apply_torque(torque)
+
+	# ── Pelvis stabilization (world-space absolute target) ──────────────
+	if _pelvis_bone_idx >= 0 and _bone_to_part.has(_pelvis_bone_idx):
+		var pelvis: BodyPart = _bone_to_part[_pelvis_bone_idx] as BodyPart
+		var pelvis_target: Transform3D = skeleton.global_transform * _rest_poses[_pelvis_bone_idx]
+		var p_target_q: Quaternion = pelvis_target.basis.get_rotation_quaternion()
+		var p_current_q: Quaternion = pelvis.global_basis.get_rotation_quaternion()
+		var p_diff: Quaternion = p_target_q * p_current_q.inverse()
+		if p_diff.w < 0.0:
+			p_diff = -p_diff
+
+		var p_axis: Vector3 = Vector3(p_diff.x, p_diff.y, p_diff.z)
+		var p_sin: float = p_axis.length()
+
+		var p_torque: Vector3 = Vector3.ZERO
+		if p_sin > 0.001:
+			p_axis = p_axis / p_sin
+			var p_angle: float = 2.0 * atan2(p_sin, p_diff.w)
+			if p_angle > PI:
+				p_angle -= TAU
+			p_torque = p_axis * p_angle * motor_stiffness * 1.5
+
+		p_torque -= pelvis.angular_velocity * motor_damping * 1.5
+		p_torque *= _motor_scale
+
+		var p_mag: float = p_torque.length()
+		if p_mag > max_torque * 1.5:
+			p_torque = p_torque * (max_torque * 1.5 / p_mag)
+
+		if pelvis.grabbed_by != null:
+			p_torque *= grabbed_motor_ratio
+
+		pelvis.apply_torque(p_torque)
 
 
 ## ── Skeleton Writeback ──────────────────────────────────────────────────────
@@ -258,13 +332,16 @@ func _build_bone_mapping() -> void:
 ## Uses the builder's child_to_joint map (child part_name → joint).
 func _build_joint_mapping() -> void:
 	_bone_to_joint.clear()
+	_pelvis_bone_idx = -1
 	for bone_idx: int in _bone_to_part:
 		var part: BodyPart = _bone_to_part[bone_idx] as BodyPart
 		if ragdoll.child_to_joint.has(part.part_name):
 			_bone_to_joint[bone_idx] = ragdoll.child_to_joint[part.part_name]
-	# Pelvis (root) has no parent joint — that's expected
-	print("[SkeletonBinding] Joint mapping: %d joints for %d bones" % [
-		_bone_to_joint.size(), _bone_to_part.size()])
+		elif part.part_name == "pelvis":
+			_pelvis_bone_idx = bone_idx
+	# Pelvis (root) has no parent joint — stabilized via world-space torque
+	print("[SkeletonBinding] Joint mapping: %d joints for %d bones (pelvis=%d)" % [
+		_bone_to_joint.size(), _bone_to_part.size(), _pelvis_bone_idx])
 
 
 ## ── Helpers ─────────────────────────────────────────────────────────────────

@@ -684,16 +684,8 @@ func _create_joint(parent_part: BodyPart, child_part: BodyPart,
 	joint_map[map_key] = joint
 	child_to_joint[child_part.part_name] = joint
 
-	# Enable angular motors on all axes (skeleton_binding sets target velocity)
-	joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_MOTOR, true)
-	joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_MOTOR, true)
-	joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_MOTOR, true)
-	joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_TARGET_VELOCITY, 0.0)
-	joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_TARGET_VELOCITY, 0.0)
-	joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_TARGET_VELOCITY, 0.0)
-	joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_FORCE_LIMIT, MOTOR_FORCE_LIMIT)
-	joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_FORCE_LIMIT, MOTOR_FORCE_LIMIT)
-	joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_FORCE_LIMIT, MOTOR_FORCE_LIMIT)
+	# Angular motors are NOT used — skeleton_binding applies corrective torque
+	# directly via apply_torque() instead (frame-independent PD controller).
 
 	# Track adjacency
 	parent_part.connected_parts.append(child_part)
