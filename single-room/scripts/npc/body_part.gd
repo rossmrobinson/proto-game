@@ -53,24 +53,25 @@ var _sfx_engine: Node = null
 var ragdoll_owner: Node3D = null
 ## Adjacent parts connected by joints (set by builder)
 var connected_parts: Array[BodyPart] = []
-## If true, the builder already assigned collision layers — _ready() won't overwrite.
-var layers_assigned: bool = false
 
 
 func _ready() -> void:
 	add_to_group(&"interactable")
 	add_to_group(&"body_part")
-	# Only set default external layers if the builder hasn't already assigned
-	# specialized layers (internal, soft-tissue).
-	if not layers_assigned:
-		collision_layer = 0
-		set_collision_layer_value(3, true)   # NPC_External
-		set_collision_layer_value(4, true)   # Interactable
-		collision_mask = 0
-		set_collision_mask_value(1, true)
-		set_collision_mask_value(3, true)
-		set_collision_mask_value(4, true)
-		set_collision_mask_value(5, true)  # NPC_SoftTissue
+	# All body parts get the same collision setup.
+	# Layer 1 (Environment) is NEVER set — player mask=1 must not see us.
+	# NOTE: internal/soft-tissue layer separation is disabled for now.
+	# The builder's _assign_internal_layers / _assign_soft_tissue_layers
+	# run before _ready(), so _ready() overwrites them.  Revisit once
+	# the ragdoll is stable enough to test separation.
+	collision_layer = 0
+	set_collision_layer_value(3, true)   # NPC_External
+	set_collision_layer_value(4, true)   # Interactable
+	collision_mask = 0
+	set_collision_mask_value(1, true)    # Environment
+	set_collision_mask_value(3, true)    # Other NPC_External
+	set_collision_mask_value(4, true)    # Interactable
+	set_collision_mask_value(5, true)    # NPC_SoftTissue
 	# Do NOT include layer 2 (Player) — NPC parts must not push the player
 	# Try to find the NerveSystem in the ragdoll owner
 	if ragdoll_owner != null:
