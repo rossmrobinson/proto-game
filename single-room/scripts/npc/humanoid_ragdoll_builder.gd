@@ -766,6 +766,7 @@ func _assign_internal_layers() -> void:
 			part.collision_mask = 0
 			part.set_collision_mask_value(6, true)  # Other internal segments
 			part.set_collision_mask_value(7, true)  # Equipment (piercings, toys)
+			part.layers_assigned = true
 
 
 ## Move soft-tissue parts (breasts, glutes, genitals) to layer 5 (NPC_SoftTissue).
@@ -780,14 +781,15 @@ func _assign_soft_tissue_layers() -> void:
 			part.collision_layer = 0
 			part.set_collision_layer_value(4, true)  # Interactable
 			part.set_collision_layer_value(5, true)  # NPC_SoftTissue
-			# Mask: Environment + Player + NPC_External + Interactable + SoftTissue + Equipment
+			# Mask: Environment + NPC_External + Interactable + SoftTissue + Equipment
+			# Do NOT include layer 2 (Player) — NPC parts must not push the player
 			part.collision_mask = 0
 			part.set_collision_mask_value(1, true)  # Environment
-			part.set_collision_mask_value(2, true)  # Player
 			part.set_collision_mask_value(3, true)  # NPC_External
 			part.set_collision_mask_value(4, true)  # Interactable
 			part.set_collision_mask_value(5, true)  # Other soft tissue
 			part.set_collision_mask_value(7, true)  # Equipment
+			part.layers_assigned = true
 
 
 # ──────────────────────────────────────────────────────────────────────────────

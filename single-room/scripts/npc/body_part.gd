@@ -53,26 +53,31 @@ var _sfx_engine: Node = null
 var ragdoll_owner: Node3D = null
 ## Adjacent parts connected by joints (set by builder)
 var connected_parts: Array[BodyPart] = []
+## If true, the builder already assigned collision layers — _ready() won't overwrite.
+var layers_assigned: bool = false
 
 
 func _ready() -> void:
 	add_to_group(&"interactable")
 	add_to_group(&"body_part")
-	# Physics layer 3 (NPC) + layer 4 (Interactable)
-	set_collision_layer_value(3, true)
-	set_collision_layer_value(4, true)
+	# Only set default external layers if the builder hasn't already assigned
+	# specialized layers (internal, soft-tissue).
+	if not layers_assigned:
+		collision_layer = 0
+		set_collision_layer_value(3, true)   # NPC_External
+		set_collision_layer_value(4, true)   # Interactable
+		collision_mask = 0
+		set_collision_mask_value(1, true)
+		set_collision_mask_value(3, true)
+		set_collision_mask_value(4, true)
+		set_collision_mask_value(5, true)  # NPC_SoftTissue
+	# Do NOT include layer 2 (Player) — NPC parts must not push the player
 	# Try to find the NerveSystem in the ragdoll owner
 	if ragdoll_owner != null:
 		for child: Node in ragdoll_owner.get_children():
 			if child.has_method(&"receive_touch"):
 				_nerve_system = child
 				break
-	# Collide with environment, other NPCs, interactables, soft tissue
-	# Do NOT include layer 2 (Player) — NPC parts must not push the player
-	set_collision_mask_value(1, true)
-	set_collision_mask_value(3, true)
-	set_collision_mask_value(4, true)
-	set_collision_mask_value(5, true)  # NPC_SoftTissue
 	# Start with some damping for stable ragdoll
 	linear_damp = 1.0
 	angular_damp = 2.0
