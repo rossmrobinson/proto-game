@@ -79,24 +79,44 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# Frame-0 diagnostic: what are the collision settings BEFORE any physics?
+	_diag_frames += 1
+	if _diag_frames == 1:
+		print("[Player] Frame 0 — pre-physics:")
+		print("  pos=%s  collision_layer=%d  collision_mask=%d" % [
+			global_position, collision_layer, collision_mask])
+		# Check all colliders touching us right now
+		var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+		var shape_query: PhysicsShapeQueryParameters3D = PhysicsShapeQueryParameters3D.new()
+		var col_shape: CollisionShape3D = $CollisionShape3D
+		shape_query.shape = col_shape.shape
+		shape_query.transform = global_transform * col_shape.transform
+		shape_query.collision_mask = 0xFFFFFFFF  # test ALL layers
+		var results: Array[Dictionary] = space.intersect_shape(shape_query, 10)
+		print("  overlapping bodies (%d):" % results.size())
+		for r: Dictionary in results:
+			var col: Object = r["collider"]
+			if col is Node:
+				var n: Node = col as Node
+				var co: CollisionObject3D = col as CollisionObject3D
+				var cl: int = co.collision_layer if co != null else -1
+				print("    %s (layer=%d)" % [n.name, cl])
+
 	_apply_gravity(delta)
 	_handle_jump()
 	_handle_movement(delta)
 	move_and_slide()
 
-	# One-shot diagnostic at frame 60 (~1 second in)
-	_diag_frames += 1
-	if _diag_frames == 60:
+	# One-shot diagnostic at frame 5 (early, after physics has settled)
+	if _diag_frames == 5:
 		var cam: Camera3D = get_active_camera()
-		print("[Player] Diag @ frame 60:")
+		print("[Player] Diag @ frame 5:")
 		print("  pos=%s  vel=%s  on_floor=%s" % [global_position, velocity, is_on_floor()])
+		print("  collision_mask=%d" % collision_mask)
 		print("  head_pivot.y=%.2f  cam=%s  mouse=%d" % [
 			head_pivot.position.y,
 			cam.name if cam != null else "null",
 			Input.mouse_mode])
-		print("  model=%s  model_visible=%s" % [
-			_player_model.name if _player_model != null else "none",
-			str(_player_model.visible) if _player_model != null else "n/a"])
 
 
 # ── Movement ─────────────────────────────────────────────────────────────────
