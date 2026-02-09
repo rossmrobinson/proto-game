@@ -26,6 +26,11 @@ extends Node
 ## Lower = easier to pull away from pose.
 @export_range(0.0, 1.0) var grabbed_spring_ratio: float = 0.05
 
+## How long (seconds) to ramp spring strength from 0 → full after spawn.
+@export var spawn_ramp_time: float = 0.4
+## How many physics frames to keep parts frozen after bind (lets Jolt settle).
+@export var spawn_freeze_frames: int = 3
+
 ## ── References ──────────────────────────────────────────────────────────────
 
 ## The Skeleton3D from the imported model scene.
@@ -36,6 +41,12 @@ var ragdoll: HumanoidRagdollBuilder = null
 
 ## Cached mapping: bone_idx (int) → BodyPart node.
 var _bone_to_part: Dictionary = {}
+
+## Spawn-ramp state.
+var _spawn_elapsed: float = 0.0
+var _spawn_frames: int = 0
+var _parts_frozen: bool = true
+var _spring_scale: float = 0.0
 
 ## If true, placeholder debug meshes on ragdoll parts are hidden
 ## (because the real skinned mesh is visible instead).
@@ -74,6 +85,24 @@ func bind(p_skeleton: Skeleton3D, p_ragdoll: HumanoidRagdollBuilder) -> void:
 func _physics_process(delta: float) -> void:
 	if skeleton == null or ragdoll == null:
 		return
+
+	# ── Spawn ramp: freeze → unfreeze → ramp springs ────────────────────
+	_spawn_frames += 1
+	if _parts_frozen:
+		# Keep snapping to bones while frozen so parts stay aligned
+		_snap_parts_to_bones()
+		if _spawn_frames >= spawn_freeze_frames:
+			_unfreeze_all_parts()
+			_parts_frozen = false
+		return
+
+	# Ramp spring scale from 0 → 1 over spawn_ramp_time
+	if _spawn_elapsed < spawn_ramp_time:
+		_spawn_elapsed += delta
+		_spring_scale = clampf(_spawn_elapsed / spawn_ramp_time, 0.0, 1.0)
+	else:
+		_spring_scale = 1.0
+
 	_apply_spring_forces(delta)
 	_write_skeleton_from_physics()
 
@@ -88,6 +117,7 @@ func _apply_spring_forces(_delta: float) -> void:
 
 		# Weaken springs on grabbed parts so they yield to the player
 		var stiff_mult: float = grabbed_spring_ratio if part.grabbed_by != null else 1.0
+		stiff_mult *= _spring_scale
 
 		# ── Position spring ──────────────────────────────────────────────
 		var displacement: Vector3 = bone_global.origin - part.global_position
@@ -175,7 +205,15 @@ func _snap_parts_to_bones() -> void:
 		part.linear_velocity = Vector3.ZERO
 		part.angular_velocity = Vector3.ZERO
 		# Keep dynamic — springs hold the pose, not kinematic freeze
+		# (unfreeze happens later via spawn ramp)
+
+
+func _unfreeze_all_parts() -> void:
+	for part_name_key: String in ragdoll.parts:
+		var part: BodyPart = ragdoll.parts[part_name_key] as BodyPart
 		part.freeze = false
+		part.linear_velocity = Vector3.ZERO
+		part.angular_velocity = Vector3.ZERO
 
 
 ## Hide the placeholder debug spheres/capsules since we now have a real mesh.

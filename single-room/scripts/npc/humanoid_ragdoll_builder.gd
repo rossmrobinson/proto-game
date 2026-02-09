@@ -188,6 +188,12 @@ func _ready() -> void:
 	_apply_collision_exclusions()
 	_assign_soft_tissue_layers()
 	_assign_internal_layers()
+	# Freeze all parts so they don't interact with physics until the
+	# skeleton binding snaps them to bone poses and ramps springs.
+	for part_name_key: String in parts:
+		var part: BodyPart = parts[part_name_key] as BodyPart
+		part.freeze = true
+		part.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 	ragdoll_built.emit()
 
 

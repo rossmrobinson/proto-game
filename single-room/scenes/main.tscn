@@ -29,12 +29,12 @@ environment = ExtResource("4_env")
 [node name="Player" parent="." unique_id=702392246 instance=ExtResource("2_player")]
 
 [node name="NPCPlaceholder" parent="." unique_id=773682861 instance=ExtResource("5_npc")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, -0.8)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0.15, -0.8)
 npc_name = "NPC_Alpha"
 model_name = "Ada"
 
 [node name="NPCPlaceholder2" parent="." unique_id=775237498 instance=ExtResource("5_npc")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -0.8)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0.15, -0.8)
 npc_name = "NPC_Beta"
 body_color = Color(0.72, 0.6, 0.52, 1)
 model_name = "Vero"
