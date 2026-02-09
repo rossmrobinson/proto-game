@@ -312,7 +312,12 @@ func _build_ragdoll() -> void:
 			"%s_breast_nipple" % side, "%s Nipple" % side.capitalize(),
 			nipple_pos,
 			_sphere_shape(NIPPLE_RADIUS_FRAC * h),
-				0.5 * mass_scale, 0.15)
+			0.5 * mass_scale, 0.15)
+
+		# Stiff spring joint — nipple stays on breast surface
+		_create_soft_joint(breast_mass, nipple,
+			Vector3(breast_x, nipple_pos.y + NIPPLE_RADIUS_FRAC * h * 0.5, breast_z + BREAST_RADIUS_FRAC * h * 0.5),
+			Vector3(-5, -5, -5), Vector3(5, 5, 5),
 			15.0, 3.0)
 
 	# ── Glutes (both sides) ─────────────────────────────────────────────
