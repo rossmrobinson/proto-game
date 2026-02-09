@@ -1,86 +1,85 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene format=3 uid="uid://bh6yvngqym7iu"]
 
 [ext_resource type="PackedScene" path="res://scenes/greybox_room.tscn" id="1_room"]
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="2_player"]
-[ext_resource type="Script" path="res://scripts/systems/diagnostics_overlay.gd" id="3_diag"]
+[ext_resource type="Script" uid="uid://yc4vl83u1gjb" path="res://scripts/systems/diagnostics_overlay.gd" id="3_diag"]
 [ext_resource type="Environment" path="res://scenes/default_env.tres" id="4_env"]
 [ext_resource type="PackedScene" path="res://scenes/npc_placeholder.tscn" id="5_npc"]
-[ext_resource type="Script" path="res://scripts/systems/grabbable.gd" id="6_grab"]
-[ext_resource type="Script" path="res://scripts/ui/command_indicator.gd" id="7_cmd"]
-[ext_resource type="Script" path="res://scripts/ui/character_editor_panel.gd" id="8_ced"]
+[ext_resource type="Script" uid="uid://5xfpv2olqxmk" path="res://scripts/systems/grabbable.gd" id="6_grab"]
+[ext_resource type="Script" uid="uid://cfmi50v4apdt6" path="res://scripts/ui/command_indicator.gd" id="7_cmd"]
+[ext_resource type="Script" uid="uid://ddd1rkrj7tadi" path="res://scripts/ui/character_editor_panel.gd" id="8_ced"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_crate"]
-size = Vector3(0.5, 0.5, 0.5)
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_crate"]
 size = Vector3(0.5, 0.5, 0.5)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_crate"]
 albedo_color = Color(0.6, 0.45, 0.25, 1)
 roughness = 0.8
 
-[node name="Main" type="Node3D"]
+[sub_resource type="BoxShape3D" id="BoxShape3D_crate"]
+size = Vector3(0.5, 0.5, 0.5)
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="Main" type="Node3D" unique_id=1239004787]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=402440088]
 environment = ExtResource("4_env")
 
-[node name="GreyboxRoom" parent="." instance=ExtResource("1_room")]
+[node name="GreyboxRoom" parent="." unique_id=1733033269 instance=ExtResource("1_room")]
 
-[node name="Player" parent="." instance=ExtResource("2_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+[node name="Player" parent="." unique_id=702392246 instance=ExtResource("2_player")]
 
-[node name="NPCPlaceholder" parent="." instance=ExtResource("5_npc")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.0, 0, -0.8)
+[node name="NPCPlaceholder" parent="." unique_id=773682861 instance=ExtResource("5_npc")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, -0.8)
 npc_name = "NPC_Alpha"
 model_name = "Ada"
 
-[node name="NPCPlaceholder2" parent="." instance=ExtResource("5_npc")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.0, 0, -0.8)
+[node name="NPCPlaceholder2" parent="." unique_id=775237498 instance=ExtResource("5_npc")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -0.8)
 npc_name = "NPC_Beta"
-model_name = "Vero"
 body_color = Color(0.72, 0.6, 0.52, 1)
+model_name = "Vero"
 
-[node name="GrabbableCrate1" type="RigidBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.8, 0.4, -2.0)
+[node name="GrabbableCrate1" type="RigidBody3D" parent="." unique_id=279079364]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.8, 0.4, -2)
 mass = 3.0
 script = ExtResource("6_grab")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="GrabbableCrate1"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="GrabbableCrate1" unique_id=1961434263]
 mesh = SubResource("BoxMesh_crate")
 surface_material_override/0 = SubResource("StandardMaterial3D_crate")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="GrabbableCrate1"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="GrabbableCrate1" unique_id=681330599]
 shape = SubResource("BoxShape3D_crate")
 
-[node name="GrabbableCrate2" type="RigidBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.3, 0.4, -2.0)
+[node name="GrabbableCrate2" type="RigidBody3D" parent="." unique_id=615266851]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.3, 0.4, -2)
 mass = 3.0
 script = ExtResource("6_grab")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="GrabbableCrate2"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="GrabbableCrate2" unique_id=762839081]
 mesh = SubResource("BoxMesh_crate")
 surface_material_override/0 = SubResource("StandardMaterial3D_crate")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="GrabbableCrate2"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="GrabbableCrate2" unique_id=467467044]
 shape = SubResource("BoxShape3D_crate")
 
-[node name="GrabbableCrate3" type="RigidBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.55, 0.9, -2.0)
+[node name="GrabbableCrate3" type="RigidBody3D" parent="." unique_id=1421079193]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.55, 0.9, -2)
 mass = 3.0
 script = ExtResource("6_grab")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="GrabbableCrate3"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="GrabbableCrate3" unique_id=1107093872]
 mesh = SubResource("BoxMesh_crate")
 surface_material_override/0 = SubResource("StandardMaterial3D_crate")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="GrabbableCrate3"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="GrabbableCrate3" unique_id=1927557171]
 shape = SubResource("BoxShape3D_crate")
 
-[node name="DiagnosticsOverlay" type="CanvasLayer" parent="."]
+[node name="DiagnosticsOverlay" type="CanvasLayer" parent="." unique_id=1273756599]
 script = ExtResource("3_diag")
 
-[node name="CommandIndicator" type="CanvasLayer" parent="."]
+[node name="CommandIndicator" type="CanvasLayer" parent="." unique_id=914479319]
 script = ExtResource("7_cmd")
 
-[node name="CharacterEditorPanel" type="CanvasLayer" parent="."]
+[node name="CharacterEditorPanel" type="CanvasLayer" parent="." unique_id=204952511]
 script = ExtResource("8_ced")
