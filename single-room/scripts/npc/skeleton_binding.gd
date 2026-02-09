@@ -29,8 +29,8 @@ extends Node
 ## Torque multiplier for grabbed parts (0-1).
 ## Lower = easier to pull away from pose.
 @export_range(0.0, 1.0) var grabbed_motor_ratio: float = 0.05
-## How long (seconds) to ramp torque strength from 0 -> full after spawn.
-@export var spawn_ramp_time: float = 0.0
+## How long (seconds) to ramp spring strength from 0 -> full after spawn.
+@export var spawn_ramp_time: float = 0.4
 ## How many physics frames to keep parts frozen after bind (lets Jolt settle).
 @export var spawn_freeze_frames: int = 10
 
@@ -336,7 +336,12 @@ func _build_joint_mapping() -> void:
 func _snap_parts_to_bones() -> void:
 	for bone_idx: int in _bone_to_part:
 		var part: BodyPart = _bone_to_part[bone_idx] as BodyPart
-		var bone_global: Transform3D = skeleton.global_transform * skeleton.get_bone_global_pose(bone_idx)
+		# Use _rest_poses (idle-adjusted) when available, otherwise raw skeleton pose
+		var bone_global: Transform3D
+		if _rest_poses.has(bone_idx):
+			bone_global = skeleton.global_transform * _rest_poses[bone_idx]
+		else:
+			bone_global = skeleton.global_transform * skeleton.get_bone_global_pose(bone_idx)
 		part.global_transform = bone_global
 		part.linear_velocity = Vector3.ZERO
 		part.angular_velocity = Vector3.ZERO
