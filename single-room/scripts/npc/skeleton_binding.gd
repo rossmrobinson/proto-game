@@ -16,10 +16,10 @@ extends Node
 
 ## Motor gain (1/s). Higher = faster convergence to rest pose.
 ## Angular target velocity = axis * angle * motor_gain.
-@export var motor_gain: float = 25.0
-## Damping gain for angular velocity (D-term of PD controller).
-## Subtracts current angular velocity to prevent overshoot/oscillation.
-@export var motor_damping: float = 0.6
+@export var motor_gain: float = 20.0
+## Damping gain for relative angular velocity (D-term of PD controller).
+## Resists relative spin between parent and child to prevent overshoot.
+@export var motor_damping: float = 0.8
 ## Motor torque limit multiplier for grabbed parts (0-1).
 ## Lower = easier to pull away from pose.
 @export_range(0.0, 1.0) var grabbed_motor_ratio: float = 0.05
@@ -46,6 +46,14 @@ var _bone_to_joint: Dictionary = {}
 ## Cached rest-pose transforms: bone_idx → Transform3D (skeleton-local).
 ## Motors drive toward these stable poses.
 var _rest_poses: Dictionary = {}
+
+## Reverse lookup: BodyPart → bone_idx.
+var _part_to_bone: Dictionary = {}
+
+## Cached rest-pose RELATIVE quaternion per joint: bone_idx → Quaternion.
+## Each is parent_rest.inverse() * child_rest — the rotation the joint should
+## maintain regardless of parent’s world orientation.
+var _rest_relative: Dictionary = {}
 
 ## Spawn-ramp state.
 var _spawn_elapsed: float = 0.0
@@ -142,19 +150,21 @@ func _process(_delta: float) -> void:
 ## ── Motor Targets ───────────────────────────────────────────────────────────
 
 ## Set each joint's angular motor target velocity so parts converge to rest pose.
-## Motor velocity = axis * angle * motor_gain (P-controller, single integrator).
-## This is solved INSIDE the Jolt constraint solver — no energy injection.
+## Uses RELATIVE rotation error (child vs parent) — each motor only corrects its
+## own joint, preventing ancestor-error fighting that causes violent thrashing.
+## PD controller: P = error * gain, D = -relative_angular_vel * damping.
 func _update_motor_targets() -> void:
 	for bone_idx: int in _bone_to_joint:
 		var joint: Generic6DOFJoint3D = _bone_to_joint[bone_idx] as Generic6DOFJoint3D
 		var part: BodyPart = _bone_to_part[bone_idx] as BodyPart
+		var parent_part: RigidBody3D = joint.get_node(joint.node_a) as RigidBody3D
 
-		# Target pose in world space from cached rest pose
-		var target_global: Transform3D = skeleton.global_transform * _rest_poses[bone_idx]
+		# Target child orientation = parent’s CURRENT world rotation * rest relative
+		var parent_quat: Quaternion = parent_part.global_basis.get_rotation_quaternion()
+		var target_quat: Quaternion = parent_quat * _rest_relative[bone_idx]
 
-		# Quaternion difference: how far is the part from the target?
+		# Quaternion difference: how far is the child from the target?
 		var current_quat: Quaternion = part.global_basis.get_rotation_quaternion()
-		var target_quat: Quaternion = target_global.basis.get_rotation_quaternion()
 		var diff: Quaternion = target_quat * current_quat.inverse()
 		# Ensure shortest arc
 		if diff.w < 0.0:
@@ -163,23 +173,23 @@ func _update_motor_targets() -> void:
 		var axis: Vector3 = Vector3(diff.x, diff.y, diff.z)
 		var sin_half: float = axis.length()
 
-		# Compute target angular velocity in world space (PD controller)
+		# P-term: angular velocity proportional to rotation error
 		var target_vel: Vector3 = Vector3.ZERO
 		if sin_half > 0.001:
 			axis = axis / sin_half
 			var angle: float = 2.0 * atan2(sin_half, diff.w)
 			if angle > PI:
 				angle -= TAU
-			# P-term: drive toward rest pose
 			target_vel = axis * angle * motor_gain
-			# D-term: brake against current angular velocity to prevent overshoot
-			target_vel -= part.angular_velocity * motor_damping
+
+		# D-term: damp RELATIVE angular velocity (child vs parent)
+		var relative_ang_vel: Vector3 = part.angular_velocity - parent_part.angular_velocity
+		target_vel -= relative_ang_vel * motor_damping
 
 		# Scale by spawn ramp
 		target_vel *= _motor_scale
 
 		# Convert world-space velocity to joint-local axes.
-		# The joint's basis is defined by node_a's (parent part's) transform.
 		var joint_basis_inv: Basis = joint.global_basis.inverse()
 		var local_vel: Vector3 = joint_basis_inv * target_vel
 
@@ -234,6 +244,11 @@ func _build_bone_mapping() -> void:
 		else:
 			unmatched_bones.append(bone_name)
 
+	# Build reverse lookup: BodyPart → bone_idx
+	_part_to_bone.clear()
+	for bone_idx_key: int in _bone_to_part:
+		_part_to_bone[_bone_to_part[bone_idx_key]] = bone_idx_key
+
 	if unmatched_bones.size() > 0:
 		print("[SkeletonBinding] %d unmatched bones: %s" % [
 			unmatched_bones.size(), ", ".join(unmatched_bones)])
@@ -274,6 +289,25 @@ func _cache_rest_poses() -> void:
 	for bone_idx: int in _bone_to_part:
 		_rest_poses[bone_idx] = skeleton.get_bone_global_pose(bone_idx)
 	_adjust_rest_to_idle()
+	_cache_rest_relative_rotations()
+
+
+## Pre-compute the rest-pose relative quaternion for each motor joint.
+## This is the rotation the joint should maintain: parent_rest.inverse() * child_rest.
+func _cache_rest_relative_rotations() -> void:
+	_rest_relative.clear()
+	for bone_idx: int in _bone_to_joint:
+		var joint: Generic6DOFJoint3D = _bone_to_joint[bone_idx] as Generic6DOFJoint3D
+		var parent_part: BodyPart = joint.get_node(joint.node_a) as BodyPart
+		if _part_to_bone.has(parent_part):
+			var parent_bone_idx: int = _part_to_bone[parent_part] as int
+			var parent_rest_quat: Quaternion = _rest_poses[parent_bone_idx].basis.get_rotation_quaternion()
+			var child_rest_quat: Quaternion = _rest_poses[bone_idx].basis.get_rotation_quaternion()
+			_rest_relative[bone_idx] = parent_rest_quat.inverse() * child_rest_quat
+		else:
+			# Parent has no mapped bone (shouldn't happen in practice)
+			_rest_relative[bone_idx] = Quaternion.IDENTITY
+			push_warning("[SkeletonBinding] No parent bone for joint child bone %d" % bone_idx)
 
 
 ## Rotate the arm chains from T-pose (arms horizontal) to a natural idle

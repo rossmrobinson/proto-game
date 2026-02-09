@@ -49,7 +49,7 @@ var child_to_joint: Dictionary = {}
 
 ## Default motor torque limit (N·m) for structural joints.
 ## Motors are solved inside the constraint solver — no jitter.
-const MOTOR_FORCE_LIMIT: float = 5000.0
+const MOTOR_FORCE_LIMIT: float = 3000.0
 
 # ── Proportions (fraction of body_height) ────────────────────────────────────
 # These come from anatomical proportions (roughly based on an ideal 7.5 head model)
@@ -627,8 +627,8 @@ func _create_part(p_name: String, p_display: String, pos: Vector3,
 	part.position = pos
 	part.continuous_cd = false  # Disabled — CCD fights Jolt constraint solver in ragdoll chains
 	part.can_sleep = false  # Active ragdolls must never sleep
-	part.linear_damp = 3.0   # Resist wild translational movement
-	part.angular_damp = 8.0  # Resist wild rotational movement / oscillation
+	part.linear_damp = 2.0   # Resist wild translational movement
+	part.angular_damp = 4.0  # Resist wild rotational movement / oscillation
 
 	# Collision shape
 	var col: CollisionShape3D = CollisionShape3D.new()
