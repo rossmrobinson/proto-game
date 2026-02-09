@@ -1,15 +1,13 @@
 class_name SkeletonBinding
 extends Node
-## Active-ragdoll skeleton binding — TORQUE-DRIVEN PD controller.
+## Active-ragdoll skeleton binding — per-part position + orientation springs.
 ##
-## Three systems keep the ragdoll upright:
-## 1. Per-part gravity compensation — each part cancels its own weight so the
-##    joint chain doesn't collapse under gravity.
-## 2. Pelvis position spring — linear PD holds the root body at target height.
-## 3. Orientation PD torques — each joint applies corrective torque toward its
-##    rest-pose relative rotation; pelvis uses absolute world-space target.
-##
-## The pelvis (root) uses ABSOLUTE world-space orientation targeting.
+## Two systems keep the ragdoll upright:
+## 1. Per-part position springs — each part is pulled toward its skeleton bone
+##    world position. This implicitly fights gravity (spring pulls up when
+##    the part sags below its target).
+## 2. Per-joint orientation torques — PD controller drives each joint toward
+##    its rest-pose relative rotation; pelvis uses absolute world-space target.
 ##
 ## The skeleton writeback runs in _process (not _physics_process) so it reads
 ## the interpolated visual position from Godot's physics interpolation,
@@ -17,20 +15,17 @@ extends Node
 
 ## ── Tuning ──────────────────────────────────────────────────────────────────
 
-## PD stiffness (N·m/rad). Higher = stronger corrective torque toward rest pose.
-@export var motor_stiffness: float = 200.0
-## PD damping (N·m·s/rad). Resists relative angular velocity to prevent overshoot.
-@export var motor_damping: float = 10.0
+## Position spring stiffness (N/m). Pulls each part toward its bone position.
+## This is what keeps the ragdoll upright — implicitly fights gravity.
+@export var spring_stiffness: float = 400.0
+## Position spring damping (N·s/m). Prevents oscillation / bouncing.
+@export var spring_damping: float = 40.0
+## Angular PD stiffness (N·m/rad). Corrective torque toward rest-pose rotation.
+@export var angular_stiffness: float = 80.0
+## Angular PD damping (N·m·s/rad). Resists relative angular velocity.
+@export var angular_damping: float = 12.0
 ## Maximum torque magnitude (N·m) per part. Prevents instability on large errors.
 @export var max_torque: float = 500.0
-## Position PD stiffness (N/m) for pelvis root body. Holds it at target height.
-@export var position_stiffness: float = 800.0
-## Position PD damping (N·s/m) for pelvis. Prevents vertical bounce.
-@export var position_damping: float = 60.0
-## Fraction of gravity to compensate per part (1.0 = full anti-gravity).
-## Each part applies an upward force equal to its weight * this value,
-## so joints don't need to bear gravitational load through the chain.
-@export_range(0.0, 1.0) var gravity_compensation: float = 1.0
 ## Torque multiplier for grabbed parts (0-1).
 ## Lower = easier to pull away from pose.
 @export_range(0.0, 1.0) var grabbed_motor_ratio: float = 0.05
@@ -73,8 +68,7 @@ var _parts_frozen: bool = true
 var _motor_scale: float = 0.0
 var _npc_name: String = ""
 var _pelvis_bone_idx: int = -1
-var _pelvis_target_pos: Vector3 = Vector3.ZERO
-var _gravity_vector: Vector3 = Vector3.ZERO
+var _bone_targets: Dictionary = {}
 var _diag_frames: int = 0
 
 ## If true, placeholder debug meshes on ragdoll parts are hidden
@@ -106,17 +100,14 @@ func bind(p_skeleton: Skeleton3D, p_ragdoll: HumanoidRagdollBuilder) -> void:
 	# Motors will always drive toward these stable targets.
 	_cache_rest_poses()
 
-	# Cache gravity vector from project settings
-	_gravity_vector = Vector3(0.0, -ProjectSettings.get_setting("physics/3d/default_gravity", 9.8), 0.0)
-
-	# Teleport parts to bone positions before motors kick in
+	# Teleport parts to bone positions before springs kick in
 	_snap_parts_to_bones()
 
-	# Cache pelvis world-space target position for position spring
-	if _pelvis_bone_idx >= 0 and _bone_to_part.has(_pelvis_bone_idx):
-		var pelvis_bone_global: Transform3D = skeleton.global_transform * _rest_poses[_pelvis_bone_idx]
-		_pelvis_target_pos = pelvis_bone_global.origin
-		print("[SkeletonBinding] Pelvis target pos: %s" % str(_pelvis_target_pos))
+	# Cache bone world-space target positions for per-part position springs
+	_bone_targets.clear()
+	for bone_idx: int in _bone_to_part:
+		var bone_global: Transform3D = skeleton.global_transform * _rest_poses[bone_idx]
+		_bone_targets[bone_idx] = bone_global.origin
 
 	# Cache NPC name for diagnostics
 	var npc_owner: Node = ragdoll.get_parent()
@@ -133,9 +124,8 @@ func bind(p_skeleton: Skeleton3D, p_ragdoll: HumanoidRagdollBuilder) -> void:
 
 	set_physics_process(true)
 	set_process(true)
-	print("[SkeletonBinding] Torque PD ragdoll bound — %d bones, %d joints, Kp=%.0f Kd=%.1f grav_comp=%.0f%%" % [
-		_bone_to_part.size(), _bone_to_joint.size(), motor_stiffness, motor_damping,
-		gravity_compensation * 100.0])
+	print("[SkeletonBinding] Active ragdoll bound — %d bones, %d joints, spring=%.0f ang=%.0f" % [
+		_bone_to_part.size(), _bone_to_joint.size(), spring_stiffness, angular_stiffness])
 
 
 func _physics_process(delta: float) -> void:
@@ -182,25 +172,20 @@ func _process(_delta: float) -> void:
 ## Apply corrective torques via apply_torque() — works in world space,
 ## no joint-frame ambiguity. Each joint computes RELATIVE rotation error
 ## (child vs parent), pelvis uses ABSOLUTE world-space target.
-func _update_motor_targets() -> void:	# ── Per-part gravity compensation ───────────────────────────────────
-	# Each part cancels its own weight so the joint chain doesn't collapse
-	# under gravity. Torques then only need to handle orientation.
-	if gravity_compensation > 0.0:
-		var anti_grav: Vector3 = -_gravity_vector * gravity_compensation
-		for bone_idx: int in _bone_to_part:
-			var gpart: BodyPart = _bone_to_part[bone_idx] as BodyPart
-			gpart.apply_central_force(anti_grav * gpart.mass)
-
-	# ── Pelvis position spring (linear PD) ────────────────────────────
-	# Holds the root body at its target world position.
-	if _pelvis_bone_idx >= 0 and _bone_to_part.has(_pelvis_bone_idx):
-		var pelvis_pos: BodyPart = _bone_to_part[_pelvis_bone_idx] as BodyPart
-		var pos_error: Vector3 = _pelvis_target_pos - pelvis_pos.global_position
-		var pos_force: Vector3 = pos_error * position_stiffness - pelvis_pos.linear_velocity * position_damping
+func _update_motor_targets() -> void:
+	# ── Per-part position springs ─────────────────────────────────────
+	# Each part is pulled toward its bone-target world position.
+	# This implicitly fights gravity (spring pulls up when part sags).
+	for bone_idx: int in _bone_to_part:
+		var part: BodyPart = _bone_to_part[bone_idx] as BodyPart
+		var target_pos: Vector3 = _bone_targets[bone_idx] as Vector3
+		var pos_error: Vector3 = target_pos - part.global_position
+		var pos_force: Vector3 = pos_error * spring_stiffness - part.linear_velocity * spring_damping
 		pos_force *= _motor_scale
-		if pelvis_pos.grabbed_by != null:
+		if part.grabbed_by != null:
 			pos_force *= grabbed_motor_ratio
-		pelvis_pos.apply_central_force(pos_force)
+		part.apply_central_force(pos_force)
+
 	# ── Joint PD torques (relative rotation) ────────────────────────────
 	for bone_idx: int in _bone_to_joint:
 		var joint: Generic6DOFJoint3D = _bone_to_joint[bone_idx] as Generic6DOFJoint3D
@@ -227,11 +212,11 @@ func _update_motor_targets() -> void:	# ── Per-part gravity compensation ─
 			var angle: float = 2.0 * atan2(sin_half, diff.w)
 			if angle > PI:
 				angle -= TAU
-			torque = axis * angle * motor_stiffness
+			torque = axis * angle * angular_stiffness
 
 		# D-term: damp RELATIVE angular velocity (child vs parent)
 		var rel_ang_vel: Vector3 = part.angular_velocity - parent_part.angular_velocity
-		torque -= rel_ang_vel * motor_damping
+		torque -= rel_ang_vel * angular_damping
 
 		# Scale by spawn ramp
 		torque *= _motor_scale
@@ -266,9 +251,9 @@ func _update_motor_targets() -> void:	# ── Per-part gravity compensation ─
 			var p_angle: float = 2.0 * atan2(p_sin, p_diff.w)
 			if p_angle > PI:
 				p_angle -= TAU
-			p_torque = p_axis * p_angle * motor_stiffness * 1.5
+			p_torque = p_axis * p_angle * angular_stiffness * 1.5
 
-		p_torque -= pelvis.angular_velocity * motor_damping * 1.5
+		p_torque -= pelvis.angular_velocity * angular_damping * 1.5
 		p_torque *= _motor_scale
 
 		var p_mag: float = p_torque.length()
