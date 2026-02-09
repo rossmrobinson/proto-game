@@ -75,6 +75,8 @@ cycle_command_target={
 
 [physics]
 
+common/physics_ticks_per_second=120
+common/physics_interpolation=true
 3d/physics_engine="Jolt Physics"
 
 [rendering]

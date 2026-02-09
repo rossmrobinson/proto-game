@@ -43,6 +43,13 @@ var parts: Dictionary = {}
 var joints: Array[Generic6DOFJoint3D] = []
 ## Maps joint key ("parent_to_child") -> Generic6DOFJoint3D for animator lookup
 var joint_map: Dictionary = {}
+## Maps child part_name -> Generic6DOFJoint3D that connects it to parent.
+## Used by SkeletonBinding to drive motor targets.
+var child_to_joint: Dictionary = {}
+
+## Default motor torque limit (N·m) for structural joints.
+## Motors are solved inside the constraint solver — no jitter.
+const MOTOR_FORCE_LIMIT: float = 300.0
 
 # ── Proportions (fraction of body_height) ────────────────────────────────────
 # These come from anatomical proportions (roughly based on an ideal 7.5 head model)
@@ -226,28 +233,28 @@ func _build_ragdoll() -> void:
 	var pelvis: BodyPart = _create_part("pelvis", "Pelvis",
 		Vector3(0.0, PELVIS_HEIGHT_FRAC * h * 0.5 + UPPER_LEG_FRAC * h + LOWER_LEG_FRAC * h + FOOT_FRAC * h, 0.0),
 		_capsule_shape(0.12 * h, PELVIS_HEIGHT_FRAC * h),
-		8.0 * mass_scale, 0.9)
+		12.0 * mass_scale, 0.9)
 
 	var spine_base_y: float = pelvis.position.y + PELVIS_HEIGHT_FRAC * h * 0.5
 	var spine_lower: BodyPart = _create_part("spine_lower", "Lower Spine",
 		Vector3(0.0, spine_base_y + SPINE_LOWER_FRAC * h * 0.5, 0.0),
 		_capsule_shape(0.10 * h, SPINE_LOWER_FRAC * h),
-		5.0 * mass_scale, 0.85)
+		8.0 * mass_scale, 0.85)
 
 	var spine_upper: BodyPart = _create_part("spine_upper", "Upper Spine",
 		Vector3(0.0, spine_lower.position.y + SPINE_LOWER_FRAC * h * 0.5 + SPINE_UPPER_FRAC * h * 0.5, 0.0),
 		_capsule_shape(0.11 * h, SPINE_UPPER_FRAC * h),
-		5.0 * mass_scale, 0.85)
+		8.0 * mass_scale, 0.85)
 
 	var chest: BodyPart = _create_part("chest", "Chest",
 		Vector3(0.0, spine_upper.position.y + SPINE_UPPER_FRAC * h * 0.5 + CHEST_HEIGHT_FRAC * h * 0.5, 0.0),
 		_capsule_shape(0.14 * h, CHEST_HEIGHT_FRAC * h),
-		10.0 * mass_scale, 0.9)
+		15.0 * mass_scale, 0.9)
 
 	var neck: BodyPart = _create_part("neck", "Neck",
 		Vector3(0.0, chest.position.y + CHEST_HEIGHT_FRAC * h * 0.5 + NECK_HEIGHT_FRAC * h * 0.5, 0.0),
 		_capsule_shape(0.04 * h, NECK_HEIGHT_FRAC * h),
-		2.0 * mass_scale, 0.7)
+		3.0 * mass_scale, 0.7)
 
 	var head: BodyPart = _create_part("head", "Head",
 		Vector3(0.0, neck.position.y + NECK_HEIGHT_FRAC * h * 0.5 + HEAD_HEIGHT_FRAC * h * 0.5, 0.0),
@@ -291,7 +298,7 @@ func _build_ragdoll() -> void:
 			"%s_breast_mass" % side, "%s Breast" % side.capitalize(),
 			Vector3(breast_x, breast_y, breast_z),
 			_sphere_shape(BREAST_RADIUS_FRAC * h),
-			0.4 * mass_scale, 0.3)
+			1.0 * mass_scale, 0.3)
 
 		# Soft spring joint for natural jiggle
 		_create_soft_joint(chest, breast_mass,
@@ -305,11 +312,7 @@ func _build_ragdoll() -> void:
 			"%s_breast_nipple" % side, "%s Nipple" % side.capitalize(),
 			nipple_pos,
 			_sphere_shape(NIPPLE_RADIUS_FRAC * h),
-			0.02 * mass_scale, 0.15)
-
-		_create_soft_joint(breast_mass, nipple,
-			Vector3(breast_x, breast_y, breast_z + BREAST_RADIUS_FRAC * h * 0.5),
-			Vector3(-8, -8, -8), Vector3(8, 8, 8),
+				0.5 * mass_scale, 0.15)
 			15.0, 3.0)
 
 	# ── Glutes (both sides) ─────────────────────────────────────────────
@@ -323,7 +326,7 @@ func _build_ragdoll() -> void:
 			"%s_glute" % side, "%s Glute" % side.capitalize(),
 			Vector3(glute_x, glute_y, glute_z),
 			_sphere_shape(GLUTE_RADIUS_FRAC * h),
-			1.2 * mass_scale, 0.5)
+			2.0 * mass_scale, 0.5)
 
 		# Moderate spring joint — glutes move less freely than breasts
 		_create_soft_joint(pelvis, glute,
@@ -342,7 +345,7 @@ func _build_ragdoll() -> void:
 			"penis_base", "Penis Base",
 			Vector3(0.0, groin_anchor_y - seg_len * 0.5, groin_z),
 			_capsule_shape(PENIS_RADIUS_FRAC * h, seg_len),
-			0.06 * mass_scale, 0.25)
+			0.5 * mass_scale, 0.25)
 
 		_create_soft_joint(pelvis, penis_base,
 			Vector3(0.0, groin_anchor_y, groin_z),
@@ -353,7 +356,7 @@ func _build_ragdoll() -> void:
 			"penis_mid", "Penis Mid",
 			Vector3(0.0, groin_anchor_y - seg_len * 1.5, groin_z),
 			_capsule_shape(PENIS_RADIUS_FRAC * h * 0.9, seg_len),
-			0.05 * mass_scale, 0.25)
+			0.5 * mass_scale, 0.25)
 
 		_create_soft_joint(penis_base, penis_mid,
 			Vector3(0.0, groin_anchor_y - seg_len, groin_z),
@@ -364,7 +367,7 @@ func _build_ragdoll() -> void:
 			"penis_tip", "Penis Tip",
 			Vector3(0.0, groin_anchor_y - seg_len * 2.5, groin_z),
 			_capsule_shape(PENIS_RADIUS_FRAC * h * 0.8, seg_len),
-			0.04 * mass_scale, 0.2)
+			0.5 * mass_scale, 0.2)
 
 		_create_soft_joint(penis_mid, penis_tip,
 			Vector3(0.0, groin_anchor_y - seg_len * 2.0, groin_z),
@@ -381,7 +384,7 @@ func _build_ragdoll() -> void:
 				"scrotum_%s" % scr_side, "%s Scrotum" % scr_side.capitalize(),
 				Vector3(scr_x, scr_y, groin_z * 0.5),
 				_sphere_shape(SCROTUM_RADIUS_FRAC * h),
-				0.05 * mass_scale, 0.2)
+				0.5 * mass_scale, 0.2)
 
 			_create_soft_joint(pelvis, scrotum,
 				Vector3(scr_x * 0.5, scr_y + SCROTUM_RADIUS_FRAC * h * 0.5, groin_z * 0.4),
@@ -398,7 +401,7 @@ func _build_ragdoll() -> void:
 				"labia_%s" % lab_side, "%s Labia" % lab_side.capitalize(),
 				Vector3(lab_x, groin_anchor_y, groin_z * 0.8),
 				_box_shape(Vector3(0.008 * h, LABIA_HEIGHT_FRAC * h, 0.012 * h)),
-				0.02 * mass_scale, 0.15)
+				0.5 * mass_scale, 0.15)
 
 			_create_soft_joint(pelvis, labia,
 				Vector3(lab_x * 0.5, groin_anchor_y + LABIA_HEIGHT_FRAC * h * 0.5, groin_z * 0.4),
@@ -410,7 +413,7 @@ func _build_ragdoll() -> void:
 			"clitoris", "Clitoris",
 			Vector3(0.0, groin_anchor_y + LABIA_HEIGHT_FRAC * h * 0.35, groin_z * 0.9),
 			_sphere_shape(CLITORIS_RADIUS_FRAC * h),
-			0.01 * mass_scale, 0.1)
+			0.5 * mass_scale, 0.1)
 
 		_create_soft_joint(pelvis, clitoris,
 			Vector3(0.0, groin_anchor_y + LABIA_HEIGHT_FRAC * h * 0.4, groin_z * 0.5),
@@ -442,25 +445,25 @@ func _build_ragdoll() -> void:
 			"%s_clavicle" % side, "%s Clavicle" % side.capitalize(),
 			Vector3(shoulder_x * 0.5, chest.position.y + CHEST_HEIGHT_FRAC * h * 0.3, 0.0),
 			_capsule_shape_horizontal(0.02 * h, CLAVICLE_FRAC * h),
-			1.5 * mass_scale, 0.6)
+			2.0 * mass_scale, 0.6)
 
 		var upper_arm: BodyPart = _create_part(
 			"%s_upper_arm" % side, "%s Upper Arm" % side.capitalize(),
 			Vector3(shoulder_x, chest.position.y + CHEST_HEIGHT_FRAC * h * 0.3 - UPPER_ARM_FRAC * h * 0.5, 0.0),
 			_capsule_shape(0.04 * h, UPPER_ARM_FRAC * h),
-			2.5 * mass_scale, 0.6)
+			4.0 * mass_scale, 0.6)
 
 		var forearm: BodyPart = _create_part(
 			"%s_forearm" % side, "%s Forearm" % side.capitalize(),
 			Vector3(shoulder_x, upper_arm.position.y - UPPER_ARM_FRAC * h * 0.5 - FOREARM_FRAC * h * 0.5, 0.0),
 			_capsule_shape(0.035 * h, FOREARM_FRAC * h),
-			1.8 * mass_scale, 0.55)
+			2.5 * mass_scale, 0.55)
 
 		var hand: BodyPart = _create_part(
 			"%s_hand" % side, "%s Hand" % side.capitalize(),
 			Vector3(shoulder_x, forearm.position.y - FOREARM_FRAC * h * 0.5 - HAND_FRAC * h * 0.5, 0.0),
 			_box_shape(Vector3(0.05 * h, HAND_FRAC * h, 0.03 * h)),
-			0.5 * mass_scale, 0.4)
+			1.5 * mass_scale, 0.4)
 
 		# ── Fully articulated fingers (5 × 3 phalanges per hand) ───────
 		var hand_base_y: float = hand.position.y - HAND_FRAC * h * 0.5
@@ -500,7 +503,7 @@ func _build_ragdoll() -> void:
 				var seg_part: BodyPart = _create_part(
 					part_name, display_name, seg_pos,
 					_capsule_shape(finger_r * r_scale, seg_len),
-					0.05 * mass_scale, 0.2)
+					1.0 * mass_scale, 0.2)
 
 				# Joint limits differ by finger and segment
 				var lo: Vector3
@@ -560,7 +563,7 @@ func _build_ragdoll() -> void:
 			"%s_upper_leg" % side, "%s Upper Leg" % side.capitalize(),
 			Vector3(hip_x, pelvis.position.y - PELVIS_HEIGHT_FRAC * h * 0.5 - UPPER_LEG_FRAC * h * 0.5, 0.0),
 			_capsule_shape(0.06 * h, UPPER_LEG_FRAC * h),
-			6.0 * mass_scale, 0.7)
+			8.0 * mass_scale, 0.7)
 
 		var lower_leg: BodyPart = _create_part(
 			"%s_lower_leg" % side, "%s Lower Leg" % side.capitalize(),
@@ -572,13 +575,13 @@ func _build_ragdoll() -> void:
 			"%s_foot" % side, "%s Foot" % side.capitalize(),
 			Vector3(hip_x, FOOT_FRAC * h * 0.5, 0.03 * h),
 			_box_shape(Vector3(0.05 * h, FOOT_FRAC * h, 0.10 * h)),
-			1.0 * mass_scale, 0.5)
+			2.0 * mass_scale, 0.5)
 
 		var toes: BodyPart = _create_part(
 			"%s_toes" % side, "%s Toes" % side.capitalize(),
 			Vector3(hip_x, 0.015 * h, 0.08 * h + 0.05 * h),
 			_box_shape(Vector3(0.04 * h, 0.015 * h, 0.03 * h)),
-			0.2 * mass_scale, 0.3)
+			1.0 * mass_scale, 0.3)
 
 		# ── Leg joints ──────────────────────────────────────────────
 		# Pelvis -> Upper Leg (hip — ball and socket)
@@ -617,7 +620,8 @@ func _create_part(p_name: String, p_display: String, pos: Vector3,
 	part.grab_stiffness = p_grab_stiffness
 	part.is_grabbable = p_grabbable
 	part.position = pos
-	part.continuous_cd = true  # Prevent tunneling for small parts
+	part.continuous_cd = false  # Disabled — CCD fights Jolt constraint solver in ragdoll chains
+	part.can_sleep = false  # Active ragdolls must never sleep
 
 	# Collision shape
 	var col: CollisionShape3D = CollisionShape3D.new()
@@ -671,6 +675,18 @@ func _create_joint(parent_part: BodyPart, child_part: BodyPart,
 	add_child(joint)
 	joints.append(joint)
 	joint_map[map_key] = joint
+	child_to_joint[child_part.part_name] = joint
+
+	# Enable angular motors on all axes (skeleton_binding sets target velocity)
+	joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_MOTOR, true)
+	joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_MOTOR, true)
+	joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_MOTOR, true)
+	joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_TARGET_VELOCITY, 0.0)
+	joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_TARGET_VELOCITY, 0.0)
+	joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_TARGET_VELOCITY, 0.0)
+	joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_FORCE_LIMIT, MOTOR_FORCE_LIMIT)
+	joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_FORCE_LIMIT, MOTOR_FORCE_LIMIT)
+	joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_FORCE_LIMIT, MOTOR_FORCE_LIMIT)
 
 	# Track adjacency
 	parent_part.connected_parts.append(child_part)
@@ -689,6 +705,11 @@ func _create_soft_joint(parent_part: BodyPart, child_part: BodyPart,
 	var joint: Generic6DOFJoint3D = _create_joint(
 		parent_part, child_part, anchor_pos,
 		angular_lower_deg, angular_upper_deg)
+
+	# Disable motors on soft tissue — angular springs handle natural jiggle instead
+	joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_MOTOR, false)
+	joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_MOTOR, false)
+	joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_MOTOR, false)
 
 	# Enable angular springs on all 3 axes — gives elastic "return to rest" behavior
 	joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_SPRING, true)
@@ -724,7 +745,7 @@ func _create_passage_chain(passage_name: String, anchor_part: BodyPart,
 
 		var seg: BodyPart = _create_part(seg_name, seg_display, seg_pos,
 			_capsule_shape(seg_radius, seg_length),
-			0.02 * mass_scale, 0.1, false)  # Not grabbable
+			0.5 * mass_scale, 0.1, false)  # Not grabbable
 
 		# High damping for internal tissue — resists wild oscillation
 		seg.linear_damp = 8.0

@@ -1,37 +1,26 @@
 class_name SkeletonBinding
 extends Node
-## Active-ragdoll skeleton binding.
+## Active-ragdoll skeleton binding — MOTOR-DRIVEN architecture.
 ##
-## Spring forces push each part toward a cached REST POSE (captured at bind
-## time). Grabbed parts have weaker springs so the player can pull them.
-## Forces are clamped by mass to prevent light parts (fingers) from exploding.
+## Instead of applying external forces (which fight the constraint solver and
+## cause jitter), this drives each joint's angular motor to reach a target
+## velocity proportional to the pose error. Motors are solved INSIDE the
+## constraint solver simultaneously with joint limits — zero energy injection
+## → zero jitter.
 ##
-## The skeleton is written back from physics every frame so the skinned mesh
-## follows the ragdoll. Writeback does NOT affect spring targets — those use
-## the cached rest poses for stability.
-##
-## Uses HumanoidRagdollBuilder.BONE_NAME_MAP for name resolution.
+## The skeleton writeback runs in _process (not _physics_process) so it reads
+## the interpolated visual position from Godot's physics interpolation,
+## giving smooth motion at any render framerate.
 
 ## ── Tuning ──────────────────────────────────────────────────────────────────
 
-## Positional spring stiffness (N/m). Higher = stiffer pose hold.
-@export var spring_stiffness: float = 400.0
-## Positional damping. Prevents oscillation.
-@export var spring_damping: float = 40.0
-## Angular spring stiffness (N·m/rad). Higher = stiffer rotation hold.
-@export var angular_stiffness: float = 80.0
-## Angular damping.
-@export var angular_damping: float = 12.0
-## Multiplier applied to spring stiffness while a part is grabbed (0-1).
+## Motor gain (1/s). Higher = faster convergence to rest pose.
+## Angular target velocity = axis * angle * motor_gain.
+@export var motor_gain: float = 8.0
+## Motor torque limit multiplier for grabbed parts (0-1).
 ## Lower = easier to pull away from pose.
-@export_range(0.0, 1.0) var grabbed_spring_ratio: float = 0.05
-
-## Maximum linear acceleration (m/s²) a spring can apply to any part.
-## Prevents light parts (fingers) from getting launched.
-@export var max_spring_accel: float = 80.0
-## Maximum angular acceleration (rad/s²) a spring can apply.
-@export var max_angular_accel: float = 60.0
-## How long (seconds) to ramp spring strength from 0 → full after spawn.
+@export_range(0.0, 1.0) var grabbed_motor_ratio: float = 0.05
+## How long (seconds) to ramp motor strength from 0 → full after spawn.
 @export var spawn_ramp_time: float = 0.4
 ## How many physics frames to keep parts frozen after bind (lets Jolt settle).
 @export var spawn_freeze_frames: int = 3
@@ -47,15 +36,19 @@ var ragdoll: HumanoidRagdollBuilder = null
 ## Cached mapping: bone_idx (int) → BodyPart node.
 var _bone_to_part: Dictionary = {}
 
+## Cached mapping: bone_idx (int) → Generic6DOFJoint3D (the joint where this
+## part is node_b / child). Pelvis has no joint entry.
+var _bone_to_joint: Dictionary = {}
+
 ## Cached rest-pose transforms: bone_idx → Transform3D (skeleton-local).
-## Springs pull toward these stable poses, NOT the writeback-overwritten skeleton.
+## Motors drive toward these stable poses.
 var _rest_poses: Dictionary = {}
 
 ## Spawn-ramp state.
 var _spawn_elapsed: float = 0.0
 var _spawn_frames: int = 0
 var _parts_frozen: bool = true
-var _spring_scale: float = 0.0
+var _motor_scale: float = 0.0
 var _npc_name: String = ""
 
 ## If true, placeholder debug meshes on ragdoll parts are hidden
@@ -65,6 +58,7 @@ var hide_placeholder_meshes: bool = true
 
 func _ready() -> void:
 	set_physics_process(false)
+	set_process(false)
 
 
 ## Call once after both skeleton and ragdoll are ready.
@@ -80,12 +74,13 @@ func bind(p_skeleton: Skeleton3D, p_ragdoll: HumanoidRagdollBuilder) -> void:
 	HumanoidRagdollBuilder._init_reverse_bone_map()
 
 	_build_bone_mapping()
+	_build_joint_mapping()
 
 	# Cache rest poses BEFORE any writeback corrupts them.
-	# Springs will always pull toward these stable targets.
+	# Motors will always drive toward these stable targets.
 	_cache_rest_poses()
 
-	# Teleport parts to bone positions before springs kick in
+	# Teleport parts to bone positions before motors kick in
 	_snap_parts_to_bones()
 
 	# Cache NPC name for diagnostics
@@ -102,15 +97,16 @@ func bind(p_skeleton: Skeleton3D, p_ragdoll: HumanoidRagdollBuilder) -> void:
 		_hide_debug_meshes()
 
 	set_physics_process(true)
-	print("[SkeletonBinding] Active ragdoll bound — %d bones, springs=%.0f/%.0f" % [
-		_bone_to_part.size(), spring_stiffness, angular_stiffness])
+	set_process(true)
+	print("[SkeletonBinding] Motor-driven ragdoll bound — %d bones, %d motor joints, gain=%.1f" % [
+		_bone_to_part.size(), _bone_to_joint.size(), motor_gain])
 
 
 func _physics_process(delta: float) -> void:
 	if skeleton == null or ragdoll == null:
 		return
 
-	# ── Spawn ramp: freeze → unfreeze → ramp springs ────────────────────
+	# ── Spawn ramp: freeze → unfreeze → ramp motors ─────────────────────
 	_spawn_frames += 1
 	if _parts_frozen:
 		# Keep snapping to bones while frozen so parts stay aligned
@@ -122,83 +118,90 @@ func _physics_process(delta: float) -> void:
 			_log_part_bounds("post_unfreeze")
 		return
 
-	# Ramp spring scale from 0 → 1 over spawn_ramp_time
+	# Ramp motor scale from 0 → 1 over spawn_ramp_time
 	if _spawn_elapsed < spawn_ramp_time:
 		_spawn_elapsed += delta
-		_spring_scale = clampf(_spawn_elapsed / spawn_ramp_time, 0.0, 1.0)
+		_motor_scale = clampf(_spawn_elapsed / spawn_ramp_time, 0.0, 1.0)
 	else:
-		_spring_scale = 1.0
+		_motor_scale = 1.0
 
-	_apply_spring_forces(delta)
+	_update_motor_targets()
+
+
+## Writeback runs in _process (render frame), reading interpolated transforms
+## from Godot's physics interpolation for smooth motion.
+func _process(_delta: float) -> void:
+	if skeleton == null or ragdoll == null or _parts_frozen:
+		return
 	_write_skeleton_from_physics()
 
 
-## ── Spring Forces ───────────────────────────────────────────────────────────
+## ── Motor Targets ───────────────────────────────────────────────────────────
 
-## Apply PD-controller spring forces pushing each part toward its rest pose.
-## Uses cached rest poses (not live skeleton) so writeback doesn't corrupt targets.
-## Forces are clamped by mass to prevent light parts (fingers) from exploding.
-func _apply_spring_forces(_delta: float) -> void:
-	for bone_idx: int in _bone_to_part:
+## Set each joint's angular motor target velocity so parts converge to rest pose.
+## Motor velocity = axis * angle * motor_gain (P-controller, single integrator).
+## This is solved INSIDE the Jolt constraint solver — no energy injection.
+func _update_motor_targets() -> void:
+	for bone_idx: int in _bone_to_joint:
+		var joint: Generic6DOFJoint3D = _bone_to_joint[bone_idx] as Generic6DOFJoint3D
 		var part: BodyPart = _bone_to_part[bone_idx] as BodyPart
-		# Use cached rest pose — immune to writeback corruption
-		var bone_global: Transform3D = skeleton.global_transform * _rest_poses[bone_idx]
 
-		# Weaken springs on grabbed parts so they yield to the player
-		var stiff_mult: float = grabbed_spring_ratio if part.grabbed_by != null else 1.0
-		stiff_mult *= _spring_scale
+		# Target pose in world space from cached rest pose
+		var target_global: Transform3D = skeleton.global_transform * _rest_poses[bone_idx]
 
-		# ── Position spring ──────────────────────────────────────────────
-		var displacement: Vector3 = bone_global.origin - part.global_position
-		var force: Vector3 = displacement * spring_stiffness * stiff_mult
-		force -= part.linear_velocity * spring_damping * stiff_mult
-		# Clamp by mass to prevent extreme acceleration on light parts
-		var max_force: float = max_spring_accel * part.mass
-		if force.length_squared() > max_force * max_force:
-			force = force.limit_length(max_force)
-		part.apply_central_force(force)
-
-		# ── Rotation spring ──────────────────────────────────────────────
+		# Quaternion difference: how far is the part from the target?
 		var current_quat: Quaternion = part.global_basis.get_rotation_quaternion()
-		var target_quat: Quaternion = bone_global.basis.get_rotation_quaternion()
-		# Shortest-arc difference
+		var target_quat: Quaternion = target_global.basis.get_rotation_quaternion()
 		var diff: Quaternion = target_quat * current_quat.inverse()
-		# Ensure we take the short path
+		# Ensure shortest arc
 		if diff.w < 0.0:
 			diff = -diff
+
 		var axis: Vector3 = Vector3(diff.x, diff.y, diff.z)
 		var sin_half: float = axis.length()
+
+		# Compute target angular velocity in world space
+		var target_vel: Vector3 = Vector3.ZERO
 		if sin_half > 0.001:
 			axis = axis / sin_half
 			var angle: float = 2.0 * atan2(sin_half, diff.w)
 			if angle > PI:
 				angle -= TAU
-			var torque: Vector3 = axis * angle * angular_stiffness * stiff_mult
-			torque -= part.angular_velocity * angular_damping * stiff_mult
-			# Clamp torque by mass to prevent spin explosions on light parts
-			var max_torque: float = max_angular_accel * part.mass
-			if torque.length_squared() > max_torque * max_torque:
-				torque = torque.limit_length(max_torque)
-			part.apply_torque(torque)
+			target_vel = axis * angle * motor_gain
+
+		# Scale by spawn ramp
+		target_vel *= _motor_scale
+
+		# Convert world-space velocity to joint-local axes.
+		# The joint's basis is defined by node_a's (parent part's) transform.
+		var joint_basis_inv: Basis = joint.global_basis.inverse()
+		var local_vel: Vector3 = joint_basis_inv * target_vel
+
+		# Reduce motor force limit when grabbed (instead of reducing velocity)
+		var force_limit: float = HumanoidRagdollBuilder.MOTOR_FORCE_LIMIT
+		if part.grabbed_by != null:
+			force_limit *= grabbed_motor_ratio
+
+		# Set motor target velocity and force limit per axis
+		joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_TARGET_VELOCITY, local_vel.x)
+		joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_TARGET_VELOCITY, local_vel.y)
+		joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_TARGET_VELOCITY, local_vel.z)
+		joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_FORCE_LIMIT, force_limit)
+		joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_FORCE_LIMIT, force_limit)
+		joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_MOTOR_FORCE_LIMIT, force_limit)
 
 
 ## ── Skeleton Writeback ──────────────────────────────────────────────────────
 
 ## Write physics body transforms back into skeleton bone poses so the skinned
-## mesh follows the ragdoll every frame.
+## mesh follows the ragdoll. Uses set_bone_global_pose_override for direct
+## world-space mapping — no parent chain recomputation needed.
 func _write_skeleton_from_physics() -> void:
 	for bone_idx: int in _bone_to_part:
 		var part: BodyPart = _bone_to_part[bone_idx] as BodyPart
 		var skel_inv: Transform3D = skeleton.global_transform.affine_inverse()
 		var part_in_skel: Transform3D = skel_inv * part.global_transform
-
-		var parent_idx: int = skeleton.get_bone_parent(bone_idx)
-		if parent_idx >= 0:
-			var parent_global: Transform3D = skeleton.get_bone_global_pose(parent_idx)
-			var local_pose: Transform3D = parent_global.affine_inverse() * part_in_skel
-			skeleton.set_bone_pose(bone_idx, local_pose)
-		else:
-			skeleton.set_bone_pose(bone_idx, part_in_skel)
+		skeleton.set_bone_global_pose_override(bone_idx, part_in_skel, 1.0, true)
 
 
 ## ── Bone Mapping ────────────────────────────────────────────────────────────
@@ -228,6 +231,19 @@ func _build_bone_mapping() -> void:
 	if unmatched_bones.size() > 0:
 		print("[SkeletonBinding] %d unmatched bones: %s" % [
 			unmatched_bones.size(), ", ".join(unmatched_bones)])
+
+
+## Build the bone_idx → Generic6DOFJoint3D lookup.
+## Uses the builder's child_to_joint map (child part_name → joint).
+func _build_joint_mapping() -> void:
+	_bone_to_joint.clear()
+	for bone_idx: int in _bone_to_part:
+		var part: BodyPart = _bone_to_part[bone_idx] as BodyPart
+		if ragdoll.child_to_joint.has(part.part_name):
+			_bone_to_joint[bone_idx] = ragdoll.child_to_joint[part.part_name]
+	# Pelvis (root) has no parent joint — that's expected
+	print("[SkeletonBinding] Joint mapping: %d joints for %d bones" % [
+		_bone_to_joint.size(), _bone_to_part.size()])
 
 
 ## ── Helpers ─────────────────────────────────────────────────────────────────
