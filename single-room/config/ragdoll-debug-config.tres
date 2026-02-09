@@ -1,0 +1,23 @@
+[gd_resource type="RagdollDebugConfig" script_class="RagdollDebugConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/ragdoll_debug_config.gd" id="1"]
+
+[resource]
+enabled = true
+show_overlay = true
+show_debug_meshes = false
+show_part_labels = false
+show_offset_lines = true
+show_joint_axes = false
+log_to_file = true
+sample_interval = 0.1
+label_update_interval = 0.2
+max_joint_axes = 24
+axis_length = 0.08
+floor_y = 0.0
+max_offset = 0.02
+max_linear_velocity = 2.0
+max_angular_velocity = 10.0
+max_penetration = 0.01
+log_frames = 120
+log_dir = "user://logs"

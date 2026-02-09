@@ -1,0 +1,30 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/greybox_room.tscn" id="1_room"]
+[ext_resource type="PackedScene" path="res://scenes/npc_placeholder.tscn" id="2_npc"]
+[ext_resource type="Script" path="res://scripts/systems/diagnostics_overlay.gd" id="3_diag"]
+[ext_resource type="Environment" path="res://scenes/default_env.tres" id="4_env"]
+[ext_resource type="Script" path="res://scripts/systems/ragdoll_scenario_runner.gd" id="5_runner"]
+
+[node name="RagdollDualTest" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("4_env")
+
+[node name="GreyboxRoom" parent="." instance=ExtResource("1_room")]
+
+[node name="NPCPlaceholder" parent="." instance=ExtResource("2_npc")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.0, 0.15, -0.8)
+npc_name = "NPC_Alpha"
+model_name = "Ada"
+
+[node name="NPCPlaceholder2" parent="." instance=ExtResource("2_npc")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.0, 0.15, -0.8)
+npc_name = "NPC_Beta"
+model_name = "Vero"
+
+[node name="DiagnosticsOverlay" type="CanvasLayer" parent="."]
+script = ExtResource("3_diag")
+
+[node name="RagdollScenarioRunner" type="Node" parent="."]
+script = ExtResource("5_runner")

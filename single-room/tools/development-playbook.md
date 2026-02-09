@@ -418,3 +418,78 @@ Fix: initialize `_target_height` and `_target_camera_y` before first physics tic
 3. Rebuild joints after snap (or re-set joint frames after snap).
 4. Increase ramp to 0.6s and clamp max force.
 5. Remove any per-part `_ready()` collision changes; keep it in builder.
+
+---
+
+## 14. Ragdoll Debug Controls
+
+| Key | Action |
+|-----|--------|
+| F3 | Toggle diagnostics overlay |
+| F5 | Toggle ragdoll debug on/off |
+| F6 | Toggle ragdoll overlay text |
+| F7 | Toggle ragdoll debug meshes |
+| F8 | Toggle per-part labels |
+| F9 | Toggle bone-to-part offset lines |
+| F10 | Toggle joint axes |
+| F11 | Toggle telemetry logging |
+
+---
+
+## 15. Ragdoll Test Scenes
+
+| Scene | Purpose |
+|------|---------|
+| `res://scenes/ragdoll_spawn_test.tscn` | Single NPC spawn stability |
+| `res://scenes/ragdoll_dual_test.tscn` | Two NPCs + inter-collision test |
+
+Each scene includes `RagdollScenarioRunner` which writes a JSON report to `user://logs/` after 5 seconds.
+
+---
+
+## 16. Scanner Suite
+
+Run all scanners from VS Code:
+1. Task: **Scanners: Run All**
+2. Optional: **Scanners: Godot Check** (requires `GODOT_PATH` env var)
+
+Scripts live in `tools/scanners/`:
+- `hardcoded-values-scan.py`
+- `layer-mask-audit.py`
+- `unused-resource-scan.py`
+- `todo-tracker.py`
+- `complexity-scan.py`
+- `scene-validator.py`
+- `run-all.ps1`
+- `godot-check.ps1`
+
+---
+
+## 17. Cache Management
+
+### Cache Levels
+| Level | What It Clears | Use When |
+|------|-----------------|----------|
+| L1 | `user://logs/` | Daily cleanup, noisy diagnostics |
+| L2 | `.godot/` | Import weirdness, stale editor state |
+| L3 | `.godot/` + full `user://` | Persistent regressions |
+| L4 | L3 + global Godot cache (env var) | Suspected global cache corruption |
+
+### VS Code Tasks
+| Task | Action |
+|------|--------|
+| `Cache: Print Paths` | Show resolved cache paths |
+| `Cache: Clear Logs` | L1 |
+| `Cache: Clear Project Cache` | L2 |
+| `Cache: Clear User Data` | user:// full wipe |
+| `Cache: Clear All` | L3 (and L4 if configured) |
+
+### Env Vars (Optional)
+| Var | Purpose |
+|-----|---------|
+| `GODOT_USERDATA_DIR` | Override user data path |
+| `GODOT_GLOBAL_CACHE_DIR` | Enable global cache clearing |
+
+### Godot Path Print
+Run `res://tools/cache/print_cache_paths.gd` via the editor Script Run button
+to print the true cache paths from Godot.

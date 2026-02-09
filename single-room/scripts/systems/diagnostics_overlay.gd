@@ -5,6 +5,7 @@ extends CanvasLayer
 
 var _visible: bool = false
 var _label: Label
+var _ragdoll_diag: Node = null
 
 
 func _ready() -> void:
@@ -15,6 +16,7 @@ func _ready() -> void:
 	_label.add_theme_color_override(&"font_color", Color.GREEN)
 	_label.visible = false
 	add_child(_label)
+	_ragdoll_diag = get_tree().root.get_node_or_null(^"RagdollDiagnostics")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -51,3 +53,8 @@ func _process(_delta: float) -> void:
 		+ "Objects: %d | Nodes: %d | Orphans: %d\n" % [object_count, node_count, orphan_count]
 		+ "Physics Bodies: %d" % physics_active
 	)
+
+	if _ragdoll_diag != null:
+		var ragdoll_text: String = _ragdoll_diag.get_overlay_text()
+		if ragdoll_text != "":
+			_label.text += "\n" + ragdoll_text

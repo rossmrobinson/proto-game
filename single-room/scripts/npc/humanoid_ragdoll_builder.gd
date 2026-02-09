@@ -680,6 +680,7 @@ func _create_joint(parent_part: BodyPart, child_part: BodyPart,
 	joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT, deg_to_rad(angular_upper_deg.z))
 
 	add_child(joint)
+	joint.add_to_group(&"ragdoll_joint")
 	joints.append(joint)
 	joint_map[map_key] = joint
 	child_to_joint[child_part.part_name] = joint

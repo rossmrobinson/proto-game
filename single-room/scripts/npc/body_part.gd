@@ -48,6 +48,8 @@ var _impact_timer: float = 0.0
 # ── Cached References ────────────────────────────────────────────────────────
 var _sfx_engine: Node = null
 
+var _debug_meshes: Array[MeshInstance3D] = []
+
 # ── Internal ─────────────────────────────────────────────────────────────────
 ## Reference to the parent ragdoll root (set by HumanoidRagdollBuilder)
 var ragdoll_owner: Node3D = null
@@ -88,6 +90,7 @@ func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 	# Cache SFX engine reference once
 	_sfx_engine = _find_sfx_engine()
+	_cache_debug_meshes()
 
 
 func get_part_name() -> String:
@@ -273,4 +276,42 @@ func _find_sfx_engine() -> Node:
 	for child: Node in root.get_children():
 		if child is SFXEngine:
 			return child
+	return null
+
+
+func set_debug_mesh_visible(visible: bool) -> void:
+	if _debug_meshes.is_empty():
+		_cache_debug_meshes()
+	for mesh: MeshInstance3D in _debug_meshes:
+		mesh.visible = visible
+
+
+func get_collision_half_height() -> float:
+	var col: CollisionShape3D = _get_collision_shape()
+	if col == null or col.shape == null:
+		return 0.0
+	var shape: Shape3D = col.shape
+	if shape is CapsuleShape3D:
+		var cap: CapsuleShape3D = shape as CapsuleShape3D
+		return cap.height * 0.5 + cap.radius
+	if shape is SphereShape3D:
+		var sphere: SphereShape3D = shape as SphereShape3D
+		return sphere.radius
+	if shape is BoxShape3D:
+		var box: BoxShape3D = shape as BoxShape3D
+		return box.size.y * 0.5
+	return 0.0
+
+
+func _cache_debug_meshes() -> void:
+	_debug_meshes.clear()
+	for child: Node in get_children():
+		if child is MeshInstance3D:
+			_debug_meshes.append(child as MeshInstance3D)
+
+
+func _get_collision_shape() -> CollisionShape3D:
+	for child: Node in get_children():
+		if child is CollisionShape3D:
+			return child as CollisionShape3D
 	return null

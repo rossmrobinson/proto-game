@@ -1,0 +1,76 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Scanners: Run All",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-File",
+        "${workspaceFolder}/single-room/tools/scanners/run-all.ps1"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Scanners: Godot Check",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-File",
+        "${workspaceFolder}/single-room/tools/scanners/godot-check.ps1"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Cache: Print Paths",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-File",
+        "${workspaceFolder}/single-room/tools/cache/print-cache-paths.ps1"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Cache: Clear Logs",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-File",
+        "${workspaceFolder}/single-room/tools/cache/clear-user-cache.ps1"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Cache: Clear User Data",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-File",
+        "${workspaceFolder}/single-room/tools/cache/clear-user-cache.ps1",
+        "-All"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Cache: Clear Project Cache",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-File",
+        "${workspaceFolder}/single-room/tools/cache/clear-project-cache.ps1"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Cache: Clear All",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-File",
+        "${workspaceFolder}/single-room/tools/cache/clear-all-caches.ps1"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}

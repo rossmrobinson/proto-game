@@ -70,6 +70,7 @@ var _npc_name: String = ""
 var _pelvis_bone_idx: int = -1
 var _bone_targets: Dictionary = {}
 var _diag_frames: int = 0
+var _diag: Node = null
 
 ## If true, placeholder debug meshes on ragdoll parts are hidden
 ## (because the real skinned mesh is visible instead).
@@ -100,8 +101,14 @@ func bind(p_skeleton: Skeleton3D, p_ragdoll: HumanoidRagdollBuilder) -> void:
 	# Motors will always drive toward these stable targets.
 	_cache_rest_poses()
 
+	add_to_group(&"ragdoll_binding")
+	_diag = get_tree().root.get_node_or_null(^"RagdollDiagnostics")
+	if _diag != null:
+		_diag.register_binding(self)
+
 	# Teleport parts to bone positions before springs kick in
 	_snap_parts_to_bones()
+	_report_diag_event("after_snap")
 
 	# Cache bone world-space target positions for per-part position springs
 	_bone_targets.clear()
@@ -139,9 +146,11 @@ func _physics_process(delta: float) -> void:
 		_snap_parts_to_bones()
 		if _spawn_frames >= spawn_freeze_frames:
 			_log_part_bounds("pre_unfreeze")
+			_report_diag_event("pre_unfreeze")
 			_unfreeze_all_parts()
 			_parts_frozen = false
 			_log_part_bounds("post_unfreeze")
+			_report_diag_event("post_unfreeze")
 		return
 
 	# Ramp motor scale from 0 → 1 over spawn_ramp_time
@@ -157,6 +166,7 @@ func _physics_process(delta: float) -> void:
 	_diag_frames += 1
 	if _diag_frames <= 30 and _diag_frames % 10 == 0:
 		_log_part_bounds("dynamic_frame_%d" % _diag_frames)
+		_report_diag_event("dynamic_frame_%d" % _diag_frames)
 
 
 ## Writeback runs in _process (render frame), reading interpolated transforms
@@ -469,6 +479,30 @@ func _log_part_bounds(tag: String) -> void:
 	print("[Ragdoll:%s] %s — y=[%.2f..%.2f] max_dist=%.2f(%s) frozen=%d/%d" % [
 		_npc_name, tag, min_y, max_y, max_dist, worst_part,
 		frozen_count, ragdoll.parts.size()])
+
+
+func get_npc_name() -> String:
+	return _npc_name
+
+
+func get_debug_part_entries() -> Array[Dictionary]:
+	var entries: Array[Dictionary] = []
+	if skeleton == null:
+		return entries
+	for bone_idx: int in _bone_to_part:
+		var part: BodyPart = _bone_to_part[bone_idx] as BodyPart
+		var target: Transform3D = skeleton.global_transform * _rest_poses[bone_idx]
+		entries.append({
+			"part": part,
+			"target_pos": target.origin,
+		})
+	return entries
+
+
+func _report_diag_event(tag: String) -> void:
+	if _diag == null:
+		return
+	_diag.report_event(self, tag)
 
 
 ## Hide the placeholder debug spheres/capsules since we now have a real mesh.
