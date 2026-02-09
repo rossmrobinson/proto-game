@@ -47,6 +47,8 @@ var _spawn_elapsed: float = 0.0
 var _spawn_frames: int = 0
 var _parts_frozen: bool = true
 var _spring_scale: float = 0.0
+var _post_unfreeze_frames: int = 0
+var _npc_name: String = ""
 
 ## If true, placeholder debug meshes on ragdoll parts are hidden
 ## (because the real skinned mesh is visible instead).
@@ -74,6 +76,16 @@ func bind(p_skeleton: Skeleton3D, p_ragdoll: HumanoidRagdollBuilder) -> void:
 	# Teleport parts to bone positions before springs kick in
 	_snap_parts_to_bones()
 
+	# Cache NPC name for diagnostics
+	var npc_owner: Node = ragdoll.get_parent()
+	if npc_owner != null and npc_owner.has_method(&"get"):
+		_npc_name = str(npc_owner.get(&"npc_name"))
+	else:
+		_npc_name = ragdoll.get_parent().name if ragdoll.get_parent() != null else "?"
+
+	# Diagnostic: show part positions after initial snap
+	_log_part_bounds("after_snap")
+
 	if hide_placeholder_meshes:
 		_hide_debug_meshes()
 
@@ -92,9 +104,16 @@ func _physics_process(delta: float) -> void:
 		# Keep snapping to bones while frozen so parts stay aligned
 		_snap_parts_to_bones()
 		if _spawn_frames >= spawn_freeze_frames:
+			_log_part_bounds("pre_unfreeze")
 			_unfreeze_all_parts()
 			_parts_frozen = false
+			_log_part_bounds("post_unfreeze")
 		return
+
+	# Track frames after unfreeze for diagnostics
+	_post_unfreeze_frames += 1
+	if _post_unfreeze_frames <= 10:
+		_log_part_bounds("alive_f%d" % _post_unfreeze_frames)
 
 	# Ramp spring scale from 0 → 1 over spawn_ramp_time
 	if _spawn_elapsed < spawn_ramp_time:
@@ -214,6 +233,31 @@ func _unfreeze_all_parts() -> void:
 		part.freeze = false
 		part.linear_velocity = Vector3.ZERO
 		part.angular_velocity = Vector3.ZERO
+
+
+func _log_part_bounds(tag: String) -> void:
+	var min_y: float = 999.0
+	var max_y: float = -999.0
+	var max_dist: float = 0.0
+	var worst_part: String = ""
+	var npc_origin: Vector3 = ragdoll.global_position
+	var frozen_count: int = 0
+	for part_name_key: String in ragdoll.parts:
+		var part: BodyPart = ragdoll.parts[part_name_key] as BodyPart
+		var py: float = part.global_position.y
+		if py < min_y:
+			min_y = py
+		if py > max_y:
+			max_y = py
+		var dist: float = part.global_position.distance_to(npc_origin)
+		if dist > max_dist:
+			max_dist = dist
+			worst_part = part_name_key
+		if part.freeze:
+			frozen_count += 1
+	print("[Ragdoll:%s] %s — y=[%.2f..%.2f] max_dist=%.2f(%s) frozen=%d/%d" % [
+		_npc_name, tag, min_y, max_y, max_dist, worst_part,
+		frozen_count, ragdoll.parts.size()])
 
 
 ## Hide the placeholder debug spheres/capsules since we now have a real mesh.
