@@ -16,14 +16,17 @@ extends Node
 
 ## Motor gain (1/s). Higher = faster convergence to rest pose.
 ## Angular target velocity = axis * angle * motor_gain.
-@export var motor_gain: float = 8.0
+@export var motor_gain: float = 25.0
+## Damping gain for angular velocity (D-term of PD controller).
+## Subtracts current angular velocity to prevent overshoot/oscillation.
+@export var motor_damping: float = 0.6
 ## Motor torque limit multiplier for grabbed parts (0-1).
 ## Lower = easier to pull away from pose.
 @export_range(0.0, 1.0) var grabbed_motor_ratio: float = 0.05
 ## How long (seconds) to ramp motor strength from 0 → full after spawn.
-@export var spawn_ramp_time: float = 0.4
+@export var spawn_ramp_time: float = 0.0
 ## How many physics frames to keep parts frozen after bind (lets Jolt settle).
-@export var spawn_freeze_frames: int = 3
+@export var spawn_freeze_frames: int = 10
 
 ## ── References ──────────────────────────────────────────────────────────────
 
@@ -160,14 +163,17 @@ func _update_motor_targets() -> void:
 		var axis: Vector3 = Vector3(diff.x, diff.y, diff.z)
 		var sin_half: float = axis.length()
 
-		# Compute target angular velocity in world space
+		# Compute target angular velocity in world space (PD controller)
 		var target_vel: Vector3 = Vector3.ZERO
 		if sin_half > 0.001:
 			axis = axis / sin_half
 			var angle: float = 2.0 * atan2(sin_half, diff.w)
 			if angle > PI:
 				angle -= TAU
+			# P-term: drive toward rest pose
 			target_vel = axis * angle * motor_gain
+			# D-term: brake against current angular velocity to prevent overshoot
+			target_vel -= part.angular_velocity * motor_damping
 
 		# Scale by spawn ramp
 		target_vel *= _motor_scale

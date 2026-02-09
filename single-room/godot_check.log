@@ -1,0 +1,29 @@
+Godot Engine v4.6.stable.official.89cea1439 - https://godotengine.org
+
+[Posture] Standing height=2.00 camera_y=1.82
+========== PLAYER READY ΓÇö BUILD 2026-02-08-C ==========
+[Player] collision_layer=2  collision_mask=1  fps_cull=1048573
+[Player] Set 5 visual node(s) to render layer 2
+[Player] Model loaded: res://assets/models/player1.glb
+[NPC] NPC_Alpha ragdoll built: 66 body parts
+[NPC] NPC_Alpha: .blend scene children: Player1, Ada, Vero, Area
+[NPC] NPC_Alpha: found armature node 'Ada' (type=Node3D)
+[SkeletonBinding] Joint mapping: 51 joints for 53 bones
+[Ragdoll:NPC_Alpha] after_snap ΓÇö y=[0.18..1.50] max_dist=1.36(left_breast_nipple) frozen=66/66
+[SkeletonBinding] Hidden 66 placeholder meshes
+[SkeletonBinding] Motor-driven ragdoll bound ΓÇö 53 bones, 51 motor joints, gain=8.0
+[NPC] Ada model loaded ΓÇö 53 bones bound
+[NPC] NPC_Beta ragdoll built: 66 body parts
+[NPC] NPC_Beta: .blend scene children: Player1, Ada, Vero, Area
+[NPC] NPC_Beta: found armature node 'Vero' (type=Node3D)
+[SkeletonBinding] Joint mapping: 51 joints for 53 bones
+[Ragdoll:NPC_Beta] after_snap ΓÇö y=[0.20..1.50] max_dist=1.36(left_breast_nipple) frozen=66/66
+[SkeletonBinding] Hidden 66 placeholder meshes
+[SkeletonBinding] Motor-driven ragdoll bound ΓÇö 53 bones, 51 motor joints, gain=8.0
+[NPC] Vero model loaded ΓÇö 53 bones bound
+[NPCBrain] NPC_Alpha wired: Memory, Voice, Attention, Profile, Nerve, Behavior, BodyLang
+[NPCBrain] NPC_Beta wired: Memory, Voice, Attention, Profile, Nerve, Behavior, BodyLang
+[Ragdoll:NPC_Alpha] pre_unfreeze ΓÇö y=[0.18..1.50] max_dist=1.36(left_breast_nipple) frozen=66/66
+[Ragdoll:NPC_Alpha] post_unfreeze ΓÇö y=[0.18..1.50] max_dist=1.36(left_breast_nipple) frozen=0/66
+[Ragdoll:NPC_Beta] pre_unfreeze ΓÇö y=[0.20..1.50] max_dist=1.36(left_breast_nipple) frozen=66/66
+[Ragdoll:NPC_Beta] post_unfreeze ΓÇö y=[0.20..1.50] max_dist=1.36(left_breast_nipple) frozen=0/66
