@@ -20,6 +20,9 @@
 - Run relevant scanners after edits and fix all warnings.
 - Long tasks run in background terminals.
 
+### LLM Diagnostics
+- The in-editor LLM chat is named "Glyph" (Godot GPT Codex).
+
 ---
 
 ## 1. Current State Summary
@@ -33,11 +36,12 @@
 | Camera toggle (V) | PARTIAL | Switches cameras, but both cameras broken |
 | NPC models (Ada, Vero) | OK | Loaded from shared .blend, 53 bones bound |
 | Active ragdoll | OK | PD-controller springs, skeleton writeback |
+| Fluid system | CODED | Accumulator, surface decals, strings, emitters, orgasm-intensity scaling |
 | Grab interaction | UNTESTED | Springs weaken on grab, but grab system untested with active ragdoll |
 | Player model (Player1) | LOADED | .glb exported, meshes on layer 2, rotation PI applied |
 | Diagnostics (F3) | OK | FPS/VRAM/draw calls overlay |
 | NPC brain/memory/voice | CODED | 504 TTS lines generated, brain subsystems wired |
-| Collision layers | OK | 7 named layers in project.godot |
+| Collision layers | OK | 8 named layers in project.godot |
 
 ### Known Bugs (Fix Before Adding Features)
 1. **Player can't move** — WASD does nothing at runtime
@@ -214,7 +218,7 @@ Godot's built-in `PhysicalBoneSimulator3D` + `PhysicalBone3D` system is simpler 
 | `npc_memory.gd` | Event memory storage |
 | `npc_attention.gd` | Focus/awareness tracking |
 
-### Systems (11 files)
+### Systems (15 files)
 | File | Purpose |
 |------|---------|
 | `grab_system.gd` | Legacy grab (superseded by hand_interaction) |
@@ -222,9 +226,13 @@ Godot's built-in `PhysicalBoneSimulator3D` + `PhysicalBone3D` system is simpler 
 | `diagnostics_overlay.gd` | F3 debug overlay |
 | `npc_command_system.gd` | Voice command dispatch to NPCs |
 | `sfx_engine.gd` | Sound effects engine |
-| `body_fluid_emitter.gd` | Fluid particle system |
-| `body_fluid_library.gd` | Fluid type definitions |
-| `fluid_type.gd` | Fluid data resource |
+| `fluid_system.gd` | Top-level fluid coordinator per NPC |
+| `fluid_accumulator.gd` | Per-passage fluid retention, deposit/expel/leak |
+| `fluid_surface.gd` | Decal3D patches on external body surfaces |
+| `fluid_string.gd` | ImmediateMesh viscous threads between surfaces |
+| `body_fluid_emitter.gd` | GPU particle emitter configured from FluidType |
+| `body_fluid_library.gd` | 17+ fluid preset factory |
+| `fluid_type.gd` | Fluid data resource (30+ properties) |
 | `piercing_attachment.gd` | Piercing physics attachment |
 | `piercing_library.gd` | Piercing type catalog |
 | `piercing_type.gd` | Piercing data resource |
@@ -261,6 +269,7 @@ Godot's built-in `PhysicalBoneSimulator3D` + `PhysicalBone3D` system is simpler 
 | 5 | NPC_SoftTissue | Breasts, genitals, glutes |
 | 6 | NPC_Internal | Anal/vaginal passage segments |
 | 7 | Equipment | Equippable items |
+| 8 | NPC_FineMotor | Fingers, toes, fine motor parts |
 
 ---
 
@@ -330,13 +339,14 @@ Do these in order. Each one should be a single commit.
 1. Origin at feet (Y=0 at ground plane in Blender)
 2. Facing -Y in Blender (becomes -Z in Godot)
 3. Scale applied (1,1,1)
-4. All transforms applied (`Ctrl+A → All Transforms`)
-5. No animations / NLA strips
-6. No physics shapes
-7. Export as `.glb` (binary glTF)
-8. `export_yup = True` (Godot convention)
-9. `export_apply = True` (bake modifiers)
-10. Test: import in Godot, verify model faces forward (-Z)
+4. Base pose is A-pose (arms 30-45 degrees down, palms forward)
+5. All transforms applied (`Ctrl+A → All Transforms`)
+6. No animations / NLA strips
+7. No physics shapes
+8. Export as `.glb` (binary glTF)
+9. `export_yup = True` (Godot convention)
+10. `export_apply = True` (bake modifiers)
+11. Test: import in Godot, verify model faces forward (-Z)
 
 ### Shared .blend Import (for NPCs)
 - Godot imports entire .blend file as one PackedScene
@@ -443,7 +453,7 @@ Fix: initialize `_target_height` and `_target_camera_y` before first physics tic
 | `res://scenes/ragdoll_spawn_test.tscn` | Single NPC spawn stability |
 | `res://scenes/ragdoll_dual_test.tscn` | Two NPCs + inter-collision test |
 
-Each scene includes `RagdollScenarioRunner` which writes a JSON report to `user://logs/` after 5 seconds.
+Each scene includes `RagdollScenarioRunner` which writes a JSON report to `J:/proto-game/single-room/logs/` after 5 seconds.
 
 ---
 
@@ -470,7 +480,7 @@ Scripts live in `tools/scanners/`:
 ### Cache Levels
 | Level | What It Clears | Use When |
 |------|-----------------|----------|
-| L1 | `user://logs/` | Daily cleanup, noisy diagnostics |
+| L1 | `J:/proto-game/single-room/logs/` | Daily cleanup, noisy diagnostics |
 | L2 | `.godot/` | Import weirdness, stale editor state |
 | L3 | `.godot/` + full `user://` | Persistent regressions |
 | L4 | L3 + global Godot cache (env var) | Suspected global cache corruption |
@@ -500,3 +510,402 @@ Scripts live in `tools/scanners/`:
 ### Godot Path Print
 Run `res://tools/cache/print_cache_paths.gd` via the editor Script Run button
 to print the true cache paths from Godot.
+
+---
+
+## 18. LLM Diagnostics (Local Proxy + Godot Plugin)
+
+### Required Env Vars (local only)
+| Var | Purpose |
+|-----|---------|
+| `OPENAI_API_KEY` | API key for proxy (never commit) |
+| `OPENAI_MODEL` | Model name (default: gpt-5.2-codex) |
+| `LLM_PROXY_PORT` | Proxy port (default: 8787) |
+
+### Start Proxy
+VS Code task: **LLM Proxy: Start**
+
+### Enable Plugin
+Godot: Project Settings -> Plugins -> Enable **LLM Diagnostics**
+
+### Use
+- Dock panel: set endpoint, click **Analyze**
+- Auto-analyze: toggles when `godot_check.log` changes and contains ERROR
+
+### Data Sent
+- Tail of `res://godot_check.log`
+- Latest `J:/proto-game/single-room/logs/*.jsonl` tail
+
+---
+
+## 19. Fluid System Architecture
+
+### Overview
+Each NPC owns one `FluidSystem` node that coordinates four subsystems:
+- **FluidAccumulator** — per-passage volume tracking (oral, vaginal, anal)
+- **BodyFluidEmitter pool** — GPU particle emitters for streams/drips/bursts
+- **FluidSurface** — Decal3D patches on external body (face, chest, thighs)
+- **FluidString pool** — ImmediateMesh viscous threads (saliva, semen strands)
+
+### Signal Flow
+```
+ArousalSystem.orgasm_started(intensity)
+  └─► FluidSystem._on_orgasm_started(intensity)
+        ├─ Has penis? → _begin_ejaculation(target, intensity)
+        │    ├─ target == "" → _emit_external_ejaculation(volume)
+        │    └─ target != "" → emit internal_ejaculation signal
+        │         └─► Orchestrator routes to receiving NPC's deposit_into_passage()
+        └─ Has vagina? → accumulator.deposit("vaginal", vaginal_fluid, surge)
+
+FluidAccumulator.fluid_leaking(passage, fluid, rate)
+  └─► FluidSystem._on_fluid_leaking() → start leak emitter
+
+FluidAccumulator.passage_emptied(passage)
+  └─► FluidSystem._on_passage_emptied() → stop leak emitter
+
+FluidAccumulator.fluid_expelled(passage, fluid, vol, dir)
+  └─► FluidSystem._on_fluid_expelled() → burst emitter
+
+ThirdPartyInsertion.insertion_started / insertion_ended
+  └─► FluidSystem → accumulator.set_penetrated()
+```
+
+### Orgasm Intensity Formula
+```
+intensity = 1.0
+  + sustained_bonus (0→0.6 over 30s of high arousal)
+  + participant_bonus (0.15 per extra participant)
+  ± random (±0.25)
+  clamped ≥ 0.3
+```
+Scales ejaculation volume, duration, and spurt count.
+
+### Leaking Rules
+| Trigger | Rate | Condition |
+|---------|------|----------|
+| Penetration | `penetration_leak_rate × excess_fraction` | Volume > threshold × capacity |
+| Gravity | `gravity_leak_rate × down_dot` | Passage opening faces downward |
+| Overflow | `excess × 10.0` (instant burst rate) | Deposit pushes past max capacity |
+| Evaporation | Passage cleared | Volume < `evaporation_threshold` |
+
+Penetration and gravity leaks combine into a single signal per frame to prevent double-counting.
+
+### Cooldown Bypass
+When `cooldown_bypass = true`:
+- Refractory period = 1s (instead of 15s)
+- Arousal decay = 8× normal during refractory
+- 20% arousal gain still allowed during refractory
+- Enables rapid back-to-back orgasms for gameplay
+
+### Fluid Type Resource
+`FluidType` has 30+ properties across groups: Appearance, Physics, String Forming, Mixing.
+`BodyFluidLibrary` provides 17+ named presets (saliva, semen, tears, sweat, blood, etc.).
+
+---
+
+## 20. Cross-NPC Fluid Wiring
+
+All four original stubs are now implemented with automatic detection:
+
+| Feature | How It Works |
+|---------|-------------|
+| Insertion target | `register_external_insertion_system()` auto-detects penis entering a passage via `ThirdPartyInsertion` signals |
+| Participant count | Automatically tracked when insertion starts/ends; updates `ArousalSystem.set_participant_count()` |
+| Internal ejaculation | `internal_ejaculation` signal auto-routes to receiving NPC's `deposit_into_passage()` |
+| Sweat | Surface patches on torso/head/arms when arousal > `sweat_arousal_threshold` |
+| Tears | Eye emitters when `CharacterProfile.discomfort_level` > `tear_discomfort_threshold` |
+
+### How to Wire Two NPCs
+
+```gdscript
+# In the orchestrator or scenario setup:
+# npc_a has a penis, npc_b has passages with a ThirdPartyInsertion system.
+npc_a.fluid_system.register_external_insertion_system(
+    npc_b.get_node("ThirdPartyInsertion") as ThirdPartyInsertion,
+    npc_b.fluid_system)
+# That's it — insertion target, ejaculation routing, and participant
+# counting are all handled automatically from this single call.
+```
+
+### Manual Override (still available)
+```gdscript
+# If you need to override the automatic behavior:
+npc_a.fluid_system.set_insertion_target("vaginal")
+npc_a.arousal_system.set_participant_count(3)
+```
+
+---
+
+## 21. NPC Mood / Mode System
+
+NPCs have a single active **mood** that governs animation style, body language,
+facial expression, and behavioral decision-making.
+
+| Priority | Mood | Behavior |
+|----------|------|----------|
+| 0 (highest) | **In Shock** | Extreme fear, paralysis — no voluntary movement |
+| 1 | **Afraid** | Physical avoidance — backs away, flinches, protective posture |
+| 2 | **Sad** | Lethargic and/or emotional — slow movement, slumped posture |
+| 3 | **Enraged** | Physical aggression — attacks, throws objects |
+| 4 | **Angry** | Physical resistance — pushes away, stiffens body |
+| 5 | **Annoyed** | Body language + facial cues only — eye rolls, sighs, crossed arms |
+| 6 | **Neutral** | Default idle state |
+| 7 | **Happy** | Positive body language + facial cues — smiles, relaxed posture |
+| 8 | **Ecstatic** | Energetic, highly expressive — bouncing, laughing, wide gestures |
+| 9 | **Flirtatious** | Seductive body language, touching object-of-affection's body |
+| 10 | **Aroused** | Sexually forward — will flirt and escalate toward intimacy |
+| 11 | **Sex-Crazed** | Direct aggressive sexual interaction — will interrupt player activities to initiate |
+| 12 (peak) | **Climax Coma** | Shock-like state but without pain/distress. If partners handle all movement, can be sustained indefinitely. This is the "maxed out" level. |
+
+### Design Notes
+- Mood is **not** a linear scale — an NPC can transition between non-adjacent moods
+  based on stimuli (e.g. Neutral → Afraid on sudden threat).
+- Arousal, comfort, and discomfort from existing systems feed into mood transitions.
+- Climax Coma is entered when orgasm intensity is extreme; NPC goes limp but remains
+  responsive to continued stimulation. Exit requires arousal dropping below threshold.
+- Mood drives which animation set / blend tree branch is active.
+
+---
+
+## 22. NPC Room Awareness & Idle Activities
+
+### Room Awareness — Detecting Intimate Activity
+Every NPC should detect physical/intimate activity happening in the room.
+When an idle NPC detects it, they roll against a behavior table:
+
+| Behavior | Description |
+|----------|-------------|
+| **Watch (from current position)** | Turns head/body to observe; stays put |
+| **Watch + masturbate (current position)** | Watches and self-stimulates where they are |
+| **Walk over + watch** | Moves closer to observe from nearby |
+| **Walk over + masturbate** | Approaches and self-stimulates while watching |
+| **Walk over + join** | Approaches and physically joins the activity |
+
+Probability weights are influenced by current mood, arousal level, and relationship
+with the participants (future: personality traits from CharacterProfile).
+
+### Idle Activities
+NPCs not engaged in interaction pick from available activities:
+
+| Activity | Animation Type | Notes |
+|----------|---------------|-------|
+| Sitting/lying on furniture | Contextual IK | Needs furniture interaction points |
+| Yoga | Pose sequence | Reuses pose system |
+| Dancing | Looping anim | Music-reactive if audio playing |
+| Pole dancing | Prop-anchored anim | Requires pole prop in scene |
+| Reading a book | Seated + hand IK | Prop: book object |
+| Playing chess | Seated + hand controls | Two-NPC activity; exercises hand IK |
+| Masturbating | Self-interaction | Driven by arousal level threshold |
+| Engaging other NPCs sexually | Multi-NPC scenario | Uses existing interaction systems |
+
+---
+
+## 23. Fluid Persistence & Resource Management
+
+### Goal
+All generated fluids (particles, decals, strings) remain rendered in the scene
+**indefinitely** as long as system resources allow.
+
+### Eviction Policy
+When resource pressure is detected (VRAM, particle count, or frame budget):
+1. Sort all active fluid instances by **creation timestamp** (oldest first).
+2. Evict oldest instances first — fade out over ~0.5 s, then free.
+3. Newly created fluids are never evicted in the same frame they spawn.
+
+### Thresholds (tunable in config)
+| Metric | Soft Limit | Hard Limit | Action |
+|--------|-----------|------------|--------|
+| Active particle systems | 50 | 80 | Soft: stop spawning new. Hard: evict oldest. |
+| Surface decal count | 100 | 150 | Same eviction pattern. |
+| Fluid string count | 20 | 30 | Strings are short-lived anyway; hard limit forces oldest cut. |
+| GPU frame time delta | +2 ms | +4 ms | Soft: reduce emission rates. Hard: bulk evict. |
+
+### Implementation Location
+`FluidSystem._process()` already runs per-frame. Add a resource monitor
+that checks counts against limits and calls eviction when needed.
+The `_active_emitters` dictionary and `FluidSurface._active_patches` array
+already track everything needed for age-sorted eviction.
+
+---
+
+## 24. Constriction & Grip Pressure Systems
+
+Two sibling systems that share the same pressure-ramp architecture but map to
+different output domains.
+
+### 24a. Constriction System (`constriction_system.gd`)
+
+**Purpose:** External neck squeeze (choking) + oral-depth airway occlusion.
+
+#### Inputs
+| Source | Signal / Poll | What it provides |
+|--------|--------------|------------------|
+| Neck `BodyPart` | `part_grabbed` / `part_released` | Grip on/off |
+| `ThirdPartyInsertion` | `depth_changed("oral", …)` | Oral depth → airway occlusion |
+
+#### Outputs
+| Property | Range | Meaning |
+|----------|-------|---------|
+| `constriction_pressure` | 0–1 | Raw neck grip strength |
+| `oral_airway_occlusion` | 0–1 | How much oral depth blocks the airway |
+| `airway_level` | 0–1 | Combined (max of grip + oral). 0 = open, 1 = sealed |
+| `consciousness` | 0–1 | 1 = awake, 0 = blacked out |
+| `breathing_suppression` | 0–1 | Read by BodyLanguageSystem to dampen breathing |
+| `breath_amplitude_override` | float | Multiplier on breathing amplitude |
+| `breath_frequency_override` | float | Multiplier on breathing frequency |
+
+#### Key Tuning
+| Parameter | Default | Notes |
+|-----------|---------|-------|
+| `grip_airway_factor` | 0.85 | Fraction of grip that occludes airway |
+| `pain_only_threshold` | 0.7 | Below = erogenous comfort; above = pain only |
+| `blackout_time` | 8 s | Full seal before consciousness lost |
+| `recovery_time` | 4 s | Open airway needed to recover |
+| `gasp_duration` | 1.2 s | Exaggerated recovery breaths on release |
+
+#### Flow
+1. Neck grabbed → pressure ramps up (4.0/s)
+2. `airway_level` computed as max(grip contribution, oral occlusion)
+3. Nerve PRESS on neck at `intensity = pressure × 0.6`
+4. Light pressure → comfort; heavy → discomfort → tears
+5. `BodyLanguageSystem` reads `breath_amplitude_override` / `breath_frequency_override`
+6. At 90%+ airway → blackout timer ticks; 8 s = unconscious
+7. On release → gasp recovery (amplitude ×3, 1.2 s)
+
+---
+
+### 24b. Grip Pressure System (`grip_pressure_system.gd`)
+
+**Purpose:** External squeeze on penis segments. Light = pleasure, hard = pain.
+
+#### Inputs
+| Source | Signal / Poll | What it provides |
+|--------|--------------|------------------|
+| `penis_base/mid/tip` BodyParts | `part_grabbed` / `part_released` | Per-segment grab |
+| Segment RigidBody3D | `global_position` (polled) | Velocity for stroke detection |
+
+#### Outputs
+| Property | Range | Meaning |
+|----------|-------|---------|
+| `grip_pressure` | 0–1 | Weighted combination of all segments |
+| `segment_pressure` | Dict[0–1] | Per-segment pressure |
+| `is_gripped` | bool | Any segment held |
+
+#### Key Tuning
+| Parameter | Default | Notes |
+|-----------|---------|-------|
+| `pleasure_peak_pressure` | 0.45 | Sweet spot — Gaussian centre |
+| `pleasure_curve_width` | 0.2 | Gaussian σ |
+| `max_pleasure_per_second` | 8.0 | Comfort/s at peak |
+| `pain_threshold` | 0.7 | Above → linear pain ramp |
+| `max_pain_per_second` | 15.0 | Discomfort/s at full crush |
+| `arousal_boost_per_second` | 0.06 | Arousal Δ/s at peak pleasure |
+| `stroke_velocity_threshold` | 0.15 m/s | Axial velocity to detect stroke |
+
+#### Pleasure / Pain Curve
+- Gaussian bell for pleasure centred at `pleasure_peak_pressure` (0.45)
+- Linear ramp for pain above `pain_threshold` (0.7)
+- Both feed CharacterProfile comfort/discomfort
+
+#### Stroke Detection
+Monitors shaft-axis velocity on the mid segment. When axial speed exceeds
+`stroke_velocity_threshold` → fires a STROKE touch type with ×1.8 pleasure
+multiplier plus a comfort bonus.
+
+#### Integration with ArousalSystem
+The existing `grab_stiffness_factor` (0.25) in ArousalSystem already softens
+erection physics when any penis part is grabbed. GripPressureSystem operates
+on top of that — it doesn't duplicate the stiffness override, it adds the
+pleasure/pain/nerve/stroke layer.
+
+### Shared Architecture Pattern
+Both systems use:
+- **Pressure ramp** — smoothed via `ramp_speed` / `release_speed` per tick
+- **Nerve PRESS events** — intensity scaled by pressure
+- **Comfort/Discomfort dual curve** — light = comfort, heavy = discomfort
+- **Signal-based state tracking** — `*_started` / `*_ended` transitions
+
+---
+
+## 25. Mouth Action System (Oral + Tongue)
+
+Two cooperating systems that drive jaw motor, suction, biting, and tongue
+surface-following on top of the existing ragdoll anatomy (jaw hinge,
+3-segment tongue, oral passage).
+
+### 25a. TouchType Additions
+
+| TouchType | Base Mult | Zone Interactions |
+|-----------|-----------|-------------------|
+| `LICK` | 0.4 | EROGENOUS ×2.0, TICKLISH ×2.2 |
+| `SUCK` | 0.7 | EROGENOUS ×1.8 |
+| `BITE` | 1.6 | PAIN_PRONE ×1.6, PRESSURE_POINT ×1.5 |
+
+### 25b. Oral Action System (`oral_action_system.gd`)
+
+**Purpose:** Jaw motor control, suction physics, bite-clamp, "what's in the mouth" detection.
+
+#### Action Modes
+| Mode | Jaw Behaviour | Nerve Output |
+|------|--------------|--------------|
+| IDLE | Rest (2° open) | None |
+| SUCK | Oscillates around 8° at 1.2 Hz | SUCK on enclosed parts each pulse |
+| BITE | Clamps toward 0° | BITE on enclosed parts, pressure ramps to 0.8 |
+| LICK | Opens to 12° (tongue room) | Delegated to TongueSurfaceFollow |
+| OPEN | Opens to 30° | None (insertion prep) |
+
+#### Enclosed Part Detection
+Scans BodyParts within `mouth_detection_radius` (4 cm) of mouth centre every
+0.1 s. Checks all NPC and player ragdolls except self.
+
+#### Cross-NPC Nerve Routing
+`_apply_touch_to_owner()` finds the NerveSystem on the **owner** of the target
+BodyPart and calls `receive_touch()` on it — so sucking player's finger
+stimulates the player, not the NPC doing the sucking.
+
+### 25c. Tongue Surface Follow (`tongue_surface_follow.gd`)
+
+**Purpose:** Steers the 3-segment tongue chain to follow / trace body surfaces.
+
+#### Modes
+| Mode | Behaviour |
+|------|-----------|
+| RETRACTED | Spring return to jaw (rest position) |
+| FOLLOW | Tip tracks a single BodyPart surface point |
+| PATH | Tip traces a sequence of BodyPart surface points with dwell time |
+
+#### Physics Approach
+- **No IK** — applies forces (`apply_central_force`) to tongue segments
+- Tip: `tip_follow_force` (3 N) toward target
+- Mid: `mid_shaping_force` (1.5 N) toward midpoint of base↔target (curves the tongue)
+- Overshoot damping when tip velocity opposes target direction
+- Contact detected when tip is within `contact_distance` (1.5 cm)
+- Max reach: 12 cm — beyond this, tongue gives up
+
+#### Lick Nerve Events
+While in contact, fires `TouchType.LICK` on the target part's owner NerveSystem.
+Intensity scales with tongue-tip velocity (active licking = ×1.5 bonus).
+Also self-stimulates tongue_tip at 30% intensity (tongue is erogenous).
+
+#### Path Mode (Advanced Licking)
+`start_path()` accepts an array of `{part: BodyPart, offset: Vector3}` steps.
+Tongue follows each step, dwells `path_dwell_time` (0.8 s), then advances.
+Example — lick penis base → shaft → tip → tickle head → retract:
+```gdscript
+tongue_follow.start_path([
+    {"part": ragdoll.parts["penis_base"], "offset": Vector3(0, 0.01, 0)},
+    {"part": ragdoll.parts["penis_mid"],  "offset": Vector3(0, 0.01, 0)},
+    {"part": ragdoll.parts["penis_tip"],  "offset": Vector3(0, 0.005, 0)},
+])
+# On path_completed → oral_action.set_action(OralAction.OPEN) → insertion
+```
+
+### Integration Points
+| System | How it connects |
+|--------|----------------|
+| `NerveSystem` | Receives LICK / SUCK / BITE touch events |
+| `CharacterProfile` | Receives comfort (light bite, suck) / discomfort (hard bite) |
+| `ThirdPartyInsertion` | OralAction.OPEN prepares jaw for passage insertion |
+| `ConstrictionSystem` | Deep oral insertion → airway occlusion (already wired) |
+| `PassageResponse` | Oral passage dilation from insertion (already wired) |
+| `FluidSystem` | Saliva (future: triggered by oral activity) |

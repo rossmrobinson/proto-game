@@ -21,6 +21,12 @@ signal part_impact(part_name: String, impact_force: float, other_body: Node)
 @export var grab_break_distance: float = 1.5
 ## Whether this part can be grabbed
 @export var is_grabbable: bool = true
+## Whether this part should be targetable/interactive (aim, highlight, click)
+@export var is_targetable: bool = true
+## Marks internal-only parts (passages) for access gating
+@export var is_internal: bool = false
+## When false, keep collision layers/masks as configured externally
+@export var apply_default_collision: bool = true
 
 @export_group("Impact Detection")
 ## Minimum relative velocity (m/s) to register as an impact.
@@ -58,23 +64,21 @@ var connected_parts: Array[BodyPart] = []
 
 
 func _ready() -> void:
-	add_to_group(&"interactable")
+	if is_targetable:
+		add_to_group(&"interactable")
 	add_to_group(&"body_part")
-	# All body parts get the same collision setup.
+	# All body parts get the same collision setup unless overridden.
 	# Layer 1 (Environment) is NEVER set — player mask=1 must not see us.
-	# NOTE: internal/soft-tissue layer separation is disabled for now.
-	# The builder's _assign_internal_layers / _assign_soft_tissue_layers
-	# run before _ready(), so _ready() overwrites them.  Revisit once
-	# the ragdoll is stable enough to test separation.
-	collision_layer = 0
-	set_collision_layer_value(3, true)   # NPC_External
-	set_collision_layer_value(4, true)   # Interactable
-	collision_mask = 0
-	set_collision_mask_value(1, true)    # Environment
-	set_collision_mask_value(3, true)    # Other NPC_External
-	set_collision_mask_value(4, true)    # Interactable
-	set_collision_mask_value(5, true)    # NPC_SoftTissue
-	# Do NOT include layer 2 (Player) — NPC parts must not push the player
+	if apply_default_collision:
+		collision_layer = 0
+		set_collision_layer_value(3, true)   # NPC_External
+		set_collision_layer_value(4, true)   # Interactable
+		collision_mask = 0
+		set_collision_mask_value(1, true)    # Environment
+		set_collision_mask_value(3, true)    # Other NPC_External
+		set_collision_mask_value(4, true)    # Interactable
+		set_collision_mask_value(5, true)    # NPC_SoftTissue
+		# Do NOT include layer 2 (Player) — NPC parts must not push the player
 	# Try to find the NerveSystem in the ragdoll owner
 	if ragdoll_owner != null:
 		for child: Node in ragdoll_owner.get_children():
@@ -279,11 +283,11 @@ func _find_sfx_engine() -> Node:
 	return null
 
 
-func set_debug_mesh_visible(visible: bool) -> void:
+func set_debug_mesh_visible(show_debug: bool) -> void:
 	if _debug_meshes.is_empty():
 		_cache_debug_meshes()
 	for mesh: MeshInstance3D in _debug_meshes:
-		mesh.visible = visible
+		mesh.visible = show_debug
 
 
 func get_collision_half_height() -> float:

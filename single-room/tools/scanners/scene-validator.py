@@ -5,11 +5,24 @@ from pathlib import Path
 
 NODE_PATTERN = re.compile(r"^\[node name=\"([^\"]+)\"")
 PASCAL_PATTERN = re.compile(r"^[A-Z][A-Za-z0-9]*$")
+EXCLUDED_PARTS = {
+    ".godot",
+    "addons",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    "node_modules",
+    "logs",
+    "llm-models",
+    ".git",
+}
 
 
 def should_skip(path: Path) -> bool:
     parts = set(path.parts)
-    return ".godot" in parts or "addons" in parts
+    return any(part in EXCLUDED_PARTS for part in parts)
 
 
 def main() -> int:

@@ -2,9 +2,26 @@
 .godot/
 *.import
 
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+**/.venv/
+
 # Environment (secrets, tokens, local config)
 .env
 .env.*
+
+# Local model weights and generated outputs
+llm-models/
+single-room/logs/
+single-room/scanner-exit-code.txt
+single-room/scanner-results.txt
+single-room/scanner-results-*.txt
+single-room/blender-scene-report.json
+single-room/*-rig-dump.json
+single-room/tools/*-rig-dump.json
+single-room/tools/cache/tmp/
 
 # OS junk
 Thumbs.db
@@ -15,16 +32,7 @@ Desktop.ini
 *.blend1
 *.blend2
 
-# MakeHuman thumbnails
-*.thumb
-
 # Editor
 *.swp
 *.swo
 *~
-
-# Python venvs
-.venv/
-
-# Generated voice audio (large binary files)
-assets/audio/voices/

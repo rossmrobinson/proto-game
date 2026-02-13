@@ -80,6 +80,19 @@ func force_behavior(behavior_name: String) -> void:
 	behavior_started.emit(behavior_name)
 
 
+## Returns the list of registered behavior names.
+func get_behavior_names() -> Array[String]:
+	var names: Array[String] = []
+	for key: String in _behaviors.keys():
+		names.append(key)
+	return names
+
+
+## Check whether a named behavior exists.
+func has_behavior(behavior_name: String) -> bool:
+	return _behaviors.has(behavior_name)
+
+
 # ── Internal ─────────────────────────────────────────────────────────────────
 
 func _randomize_timer() -> void:

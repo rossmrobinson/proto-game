@@ -36,6 +36,11 @@ enum AwarenessLevel {
 ## How many seconds of no stimuli before dropping from NOTICED to UNAWARE.
 @export var notice_decay_time: float = 8.0
 
+@export_group("Head Tracking")
+@export var track_player_movement: bool = true
+@export var movement_threshold: float = 0.2
+@export var movement_hold_time: float = 2.0
+
 # ── State ────────────────────────────────────────────────────────────────────
 ## What the NPC is currently looking at / focused on (can be null).
 var focus_target: Node3D = null
@@ -55,6 +60,10 @@ var _attention_timer: float = 0.0
 var _startle_timer: float = 0.0
 var _npc: Node3D = null
 var _player_ref: Node3D = null
+var _player_last_pos: Vector3 = Vector3.ZERO
+var _player_has_pos: bool = false
+var _movement_timer: float = 0.0
+var _player_moved_recently: bool = false
 ## Competing interest targets sorted by priority.
 var _interests: Array[Dictionary] = []  # { "target": Node3D, "priority": float }
 
@@ -67,6 +76,7 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	_update_player_distance()
+	_update_player_movement(delta)
 	_update_proximity_events()
 	_tick_timers(delta)
 	_evaluate_awareness()
@@ -138,6 +148,14 @@ func get_awareness_label() -> String:
 	return "unknown"
 
 
+func is_player_moving_recently() -> bool:
+	return _player_moved_recently
+
+
+func is_focused_on_player() -> bool:
+	return _player_ref != null and focus_target == _player_ref
+
+
 # ── Internal ─────────────────────────────────────────────────────────────────
 
 func _find_player() -> void:
@@ -179,6 +197,31 @@ func _update_player_distance() -> void:
 		player_distance = INF
 		return
 	player_distance = _npc.global_position.distance_to(_player_ref.global_position)
+
+
+func _update_player_movement(delta: float) -> void:
+	if not track_player_movement:
+		_player_moved_recently = false
+		_movement_timer = 0.0
+		_player_has_pos = false
+		return
+	if _player_ref == null or not is_instance_valid(_player_ref):
+		_player_moved_recently = false
+		_movement_timer = 0.0
+		_player_has_pos = false
+		return
+	var pos: Vector3 = _player_ref.global_position
+	if not _player_has_pos:
+		_player_last_pos = pos
+		_player_has_pos = true
+		return
+	var moved: float = pos.distance_to(_player_last_pos)
+	_player_last_pos = pos
+	if moved >= movement_threshold:
+		_movement_timer = movement_hold_time
+	if _movement_timer > 0.0:
+		_movement_timer = maxf(_movement_timer - delta, 0.0)
+	_player_moved_recently = _movement_timer > 0.0
 
 
 func _update_proximity_events() -> void:

@@ -5,6 +5,19 @@ from pathlib import Path
 
 LAYER_PATTERN = re.compile(r'3d_physics/layer_(\d+)\s*=\s*"([^"]+)"')
 CALL_PATTERN = re.compile(r"set_collision_(layer|mask)_value\((\d+)")
+EXCLUDED_PARTS = {
+    ".godot",
+    "addons",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    "node_modules",
+    "logs",
+    "llm-models",
+    ".git",
+}
 
 
 def parse_layers(project_path: Path):
@@ -19,7 +32,7 @@ def parse_layers(project_path: Path):
 
 def should_skip(path: Path) -> bool:
     parts = set(path.parts)
-    return ".godot" in parts or "addons" in parts
+    return any(part in EXCLUDED_PARTS for part in parts)
 
 
 def main() -> int:

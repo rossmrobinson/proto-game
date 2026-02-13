@@ -8,11 +8,25 @@ URL_PATTERN = re.compile(r"\b(?:https?|wss?|tcp|udp)://", re.IGNORECASE)
 PORT_PATTERN = re.compile(r"\b(?:port|PORT|listen_port|server_port)\b[^\n]*\b(\d{2,5})\b")
 
 TEXT_EXTS = {".gd", ".tscn", ".tres", ".cfg", ".ini", ".json", ".py"}
+EXCLUDED_PARTS = {
+    ".godot",
+    "addons",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    "node_modules",
+    "logs",
+    "llm-models",
+    ".git",
+    "tools",
+}
 
 
 def should_skip(path: Path) -> bool:
     parts = set(path.parts)
-    return ".godot" in parts or "addons" in parts
+    return any(part in EXCLUDED_PARTS for part in parts)
 
 
 def scan_file(path: Path):

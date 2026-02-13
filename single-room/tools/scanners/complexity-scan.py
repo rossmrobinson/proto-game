@@ -5,17 +5,30 @@ from pathlib import Path
 
 FUNC_PATTERN = re.compile(r"^\s*func\s+([A-Za-z0-9_]+)")
 CTRL_PATTERN = re.compile(r"\b(if|elif|for|while|match|case)\b|&&|\|\|")
+EXCLUDED_PARTS = {
+    ".godot",
+    "addons",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    "node_modules",
+    "logs",
+    "llm-models",
+    ".git",
+}
 
 
 def should_skip(path: Path) -> bool:
     parts = set(path.parts)
-    return ".godot" in parts or "addons" in parts
+    return any(part in EXCLUDED_PARTS for part in parts)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", required=True)
-    parser.add_argument("--max", type=int, default=15)
+    parser.add_argument("--max", type=int, default=35)
     args = parser.parse_args()
 
     root = Path(args.root).resolve()

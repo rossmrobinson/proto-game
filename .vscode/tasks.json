@@ -134,6 +134,89 @@
         "${workspaceFolder}/single-room/tools/cache/clear-nuclear.ps1"
       ],
       "problemMatcher": []
+    },
+    {
+      "label": "LLM Proxy: Start",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}/single-room/tools/llm-proxy/proxy-server.py"
+      ],
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "LLM Proxy: Health",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-Command",
+        "Invoke-RestMethod http://127.0.0.1:8787/health"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Rig Upgrade: Model Builder (Player1 male)",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": [
+        "${workspaceFolder}/single-room/tools/blender-upgrade-pipeline.py",
+        "--blend",
+        "J:/proto-game-blender/model-builder.blend",
+        "--blender-path",
+        "C:/Program Files/Blender Foundation/Blender 4.5/blender.exe",
+        "--sex",
+        "auto",
+        "--male-armatures",
+        "Player1",
+        "--save",
+        "--strict",
+        "--copy-rig-dump-to",
+        "${workspaceFolder}/single-room/logs/model-builder-rig-dump.json"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Rig Upgrade: Model Builder (Player1 only)",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": [
+        "${workspaceFolder}/single-room/tools/blender-upgrade-pipeline.py",
+        "--blend",
+        "J:/proto-game-blender/model-builder.blend",
+        "--blender-path",
+        "C:/Program Files/Blender Foundation/Blender 4.5/blender.exe",
+        "--armature",
+        "Player1",
+        "--sex",
+        "male",
+        "--save",
+        "--strict",
+        "--copy-rig-dump-to",
+        "${workspaceFolder}/single-room/logs/model-builder-player1-rig-dump.json"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Rig Upgrade: Model Builder (Ada only)",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": [
+        "${workspaceFolder}/single-room/tools/blender-upgrade-pipeline.py",
+        "--blend",
+        "J:/proto-game-blender/model-builder.blend",
+        "--blender-path",
+        "C:/Program Files/Blender Foundation/Blender 4.5/blender.exe",
+        "--armature",
+        "Ada",
+        "--sex",
+        "female",
+        "--save",
+        "--strict",
+        "--copy-rig-dump-to",
+        "${workspaceFolder}/single-room/logs/model-builder-ada-rig-dump.json"
+      ],
+      "problemMatcher": []
     }
   ]
 }

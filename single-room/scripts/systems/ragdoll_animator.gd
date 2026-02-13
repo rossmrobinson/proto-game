@@ -61,11 +61,44 @@ func set_pose(pose: RagdollPose, immediate: bool = false) -> void:
 		_apply_targets()
 		_active = true
 		pose_reached.emit(pose.pose_name)
-	else:
-		_target_pose = pose
-		_blend_t = 0.0
-		_blend_speed = 1.0 / maxf(blend_time, 0.01)
-		_active = true
+		return
+
+	_target_pose = pose
+	_blend_t = 0.0
+	_blend_speed = 1.0 / maxf(blend_time, 0.01)
+	_active = true
+
+
+## Set a target pose by name, resolved via RagdollPoseLibrary.
+func set_pose_by_name(pose_name: String, override_blend_time: float = -1.0) -> bool:
+	var pose: RagdollPose = RagdollPoseLibrary.get_pose(pose_name)
+	if pose == null:
+		push_warning("[RagdollAnimator] Unknown pose: %s" % pose_name)
+		return false
+	if override_blend_time == 0.0:
+		set_pose(pose, true)
+		return true
+	_stop_sequence_internal()
+	_target_pose = pose
+	_blend_t = 0.0
+	var blend: float = blend_time if override_blend_time < 0.0 else override_blend_time
+	_blend_speed = 1.0 / maxf(blend, 0.01)
+	_active = true
+	return true
+
+
+## Play a sequence of pose names.
+func play_sequence_by_name(seq_name: String, pose_names: Array[String],
+		hold_times: Array[float], loop: bool = false) -> void:
+	var poses: Array[RagdollPose] = []
+	for pose_name: String in pose_names:
+		var pose: RagdollPose = RagdollPoseLibrary.get_pose(pose_name)
+		if pose != null:
+			poses.append(pose)
+	if poses.is_empty():
+		push_warning("[RagdollAnimator] Sequence has no valid poses: %s" % seq_name)
+		return
+	play_sequence(seq_name, poses, hold_times, loop)
 
 
 ## Play a looping or one-shot sequence of poses.
@@ -149,6 +182,9 @@ func _interpolate_targets() -> void:
 
 
 func _apply_targets() -> void:
+	if not _offset_layer.is_empty():
+		_apply_targets_with_offsets()
+		return
 	var stiffness_mult: float = 1.0
 	if _target_pose != null:
 		stiffness_mult = _target_pose.drive_stiffness

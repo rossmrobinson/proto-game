@@ -6,11 +6,25 @@ from pathlib import Path
 PATTERN = re.compile(r"\b(TODO|FIXME|HACK)\b")
 
 TEXT_EXTS = {".gd", ".py", ".md", ".tscn", ".tres", ".cfg", ".ini", ".json"}
+EXCLUDED_PARTS = {
+    ".godot",
+    "addons",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    "node_modules",
+    "logs",
+    "llm-models",
+    ".git",
+    "tools",
+}
 
 
 def should_skip(path: Path) -> bool:
     parts = set(path.parts)
-    return ".godot" in parts or "addons" in parts
+    return any(part in EXCLUDED_PARTS for part in parts)
 
 
 def main() -> int:

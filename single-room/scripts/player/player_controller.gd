@@ -18,10 +18,13 @@ extends CharacterBody3D
 @export var pitch_min: float = -89.0
 @export var pitch_max: float = 89.0
 
-## Optional standalone player model (e.g., "res://assets/models/player1.glb").
+## Optional standalone player model scene (e.g., "res://assets/models/room1-models.blend").
 ## Leave empty to use the placeholder capsule.
 @export_group("Model")
 @export var player_model_path: String = ""
+## Optional model name inside the scene (used for multi-model .blend files).
+@export var player_model_name: String = ""
+@export var show_body_in_fps: bool = true
 
 # ── Node References ──────────────────────────────────────────────────────────
 @onready var head_pivot: Node3D = $HeadPivot
@@ -31,39 +34,53 @@ extends CharacterBody3D
 @onready var body_mesh: MeshInstance3D = $BodyMesh
 @onready var interaction_ray: RayCast3D = $HeadPivot/InteractionRay
 
+# ── Signals ──────────────────────────────────────────────────────────────────
+## Emitted after the player model loads and a Skeleton3D is found.
+signal player_model_loaded(skeleton: Skeleton3D)
+
 # ── State ────────────────────────────────────────────────────────────────────
 var is_first_person: bool = true
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _targeting: TargetingSystem = null
+var _ragdoll_bridge: PlayerRagdollBridge = null
 ## The loaded player mesh root (if any).
 var _player_model: Node3D = null
+var _free_hands_active: bool = false
+var _free_hands_hold: bool = false
+var _free_hands_toggle: bool = false
+var _free_hands_last_tap: float = 0.0
+@export var free_hands_double_tap_window: float = 0.3
 
 func _ready() -> void:
 	print("========== PLAYER READY — BUILD 2026-02-08-C ==========")
+	_ensure_action(&"free_hands", KEY_CAPSLOCK)
 	# Force collision settings regardless of .tscn cache
 	collision_mask = 1
 	collision_layer = 2
 	# Force FPS camera cull_mask: all layers EXCEPT layer 2 (player body)
-	camera_fps.cull_mask = 0xFFFFF & ~(1 << 1)  # 1048573
+	_update_fps_cull_mask()
 	print("[Player] collision_layer=%d  collision_mask=%d  fps_cull=%d" % [
 		collision_layer, collision_mask, camera_fps.cull_mask])
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_apply_camera_mode()
-	# Cache sibling TargetingSystem for detached-cursor routing
+	# Cache sibling systems
 	for child: Node in get_children():
 		if child is TargetingSystem:
 			_targeting = child as TargetingSystem
-			break
+		if child is PlayerRagdollBridge:
+			_ragdoll_bridge = child as PlayerRagdollBridge
 	# Load standalone player model if configured
 	if player_model_path != "":
 		_load_player_model()
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _handle_free_hands_input(event):
+		return
 	# Mouse look — route to crosshair when detached, else rotate camera
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var motion: InputEventMouseMotion = event as InputEventMouseMotion
-		if _targeting != null and _targeting.detached_cursor:
+		if _targeting != null and _targeting.is_detached_cursor_active():
 			_targeting.move_crosshair(motion.relative)
 		else:
 			_handle_mouse_look(motion)
@@ -79,6 +96,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		else:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func _process(_delta: float) -> void:
+	_update_free_hands()
 
 
 func _physics_process(delta: float) -> void:
@@ -124,6 +145,53 @@ func _handle_movement(delta: float) -> void:
 		velocity.z = lerpf(velocity.z, 0.0, friction * delta)
 
 
+func _update_free_hands() -> void:
+	var active: bool = _free_hands_hold
+	if _free_hands_toggle:
+		active = not _free_hands_hold
+	if active == _free_hands_active:
+		return
+	_free_hands_active = active
+	if _targeting != null:
+		_targeting.set_free_hands(_free_hands_active)
+	if _free_hands_active:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func is_free_hands_active() -> bool:
+	return _free_hands_active
+
+
+func _handle_free_hands_input(event: InputEvent) -> bool:
+	if event is not InputEventKey:
+		return false
+	var key: InputEventKey = event as InputEventKey
+	if key.echo:
+		return false
+	if key.physical_keycode != KEY_CAPSLOCK:
+		return false
+	var now: float = Time.get_ticks_msec() / 1000.0
+	if key.pressed:
+		if now - _free_hands_last_tap <= free_hands_double_tap_window:
+			_free_hands_toggle = not _free_hands_toggle
+			_free_hands_last_tap = 0.0
+		else:
+			_free_hands_last_tap = now
+		_free_hands_hold = true
+	else:
+		_free_hands_hold = false
+	return true
+
+
+func _ensure_action(action_name: StringName, keycode: Key) -> void:
+	if InputMap.has_action(action_name):
+		return
+	InputMap.add_action(action_name)
+	var ev: InputEventKey = InputEventKey.new()
+	ev.physical_keycode = keycode
+	InputMap.action_add_event(action_name, ev)
+
+
 # ── Mouse Look ───────────────────────────────────────────────────────────────
 
 func _handle_mouse_look(event: InputEventMouseMotion) -> void:
@@ -144,9 +212,17 @@ func _apply_camera_mode() -> void:
 	if is_first_person:
 		camera_fps.current = true
 		camera_tps.current = false
-		# Player model stays visible — CameraFPS cull_mask excludes layer 2.
-		# Hide the blue placeholder capsule.
-		body_mesh.visible = false
+		_update_fps_cull_mask()
+		if show_body_in_fps:
+			if _player_model != null:
+				_player_model.visible = true
+				body_mesh.visible = false
+			else:
+				body_mesh.visible = true
+		else:
+			if _player_model != null:
+				_player_model.visible = false
+			body_mesh.visible = false
 	else:
 		camera_fps.current = false
 		camera_tps.current = true
@@ -171,12 +247,23 @@ func _load_player_model() -> void:
 		push_warning("[Player] Failed to load model: %s" % player_model_path)
 		return
 
-	var model: Node3D = scene_res.instantiate() as Node3D
-	if model == null:
+	var scene_root: Node3D = scene_res.instantiate() as Node3D
+	if scene_root == null:
 		push_warning("[Player] Model instantiation failed")
 		return
 
+	var model: Node3D = scene_root
+	if player_model_name != "":
+		var picked: Node3D = _extract_named_model(scene_root, player_model_name)
+		if picked == null:
+			push_warning("[Player] Model '%s' not found in %s" % [
+				player_model_name, player_model_path])
+			scene_root.queue_free()
+			return
+		model = picked
+
 	model.name = "PlayerModel"
+	_clear_owner_recursive(model)
 
 	# Strip any physics bodies / collision shapes from the imported scene
 	# (doing this BEFORE adding to tree prevents collisions on first frame)
@@ -195,6 +282,7 @@ func _load_player_model() -> void:
 
 	# Stop any auto-playing animations
 	_stop_imported_animations(model)
+	_apply_idle_pose_to_model(model)
 
 	# Hide placeholder capsule — model replaces it
 	body_mesh.visible = false
@@ -203,7 +291,119 @@ func _load_player_model() -> void:
 	_exclude_bodies_from_spring_arm(model)
 
 	_apply_camera_mode()
-	print("[Player] Model loaded: %s" % player_model_path)
+
+	# Emit skeleton for ragdoll bridge binding
+	var skel: Skeleton3D = _find_skeleton(model)
+	if skel != null:
+		player_model_loaded.emit(skel)
+		print("[Player] Model loaded + skeleton emitted: %s" % player_model_path)
+	else:
+		print("[Player] Model loaded (no skeleton): %s" % player_model_path)
+
+
+func _update_fps_cull_mask() -> void:
+	if camera_fps == null:
+		return
+	var mask: int = 0xFFFFF
+	if not show_body_in_fps:
+		mask &= ~(1 << 1)
+	camera_fps.cull_mask = mask
+
+
+func _apply_idle_pose_to_model(model: Node3D) -> void:
+	var skeleton: Skeleton3D = _find_skeleton(model)
+	if skeleton == null:
+		return
+	var left_chain: PackedStringArray = [
+		"upperarm_l", "lowerarm_l", "hand_l",
+		"thumb_01_l", "thumb_02_l", "thumb_03_l",
+		"index_01_l", "index_02_l", "index_03_l",
+		"middle_01_l", "middle_02_l", "middle_03_l",
+		"ring_01_l", "ring_02_l", "ring_03_l",
+		"pinky_01_l", "pinky_02_l", "pinky_03_l",
+	]
+	var right_chain: PackedStringArray = [
+		"upperarm_r", "lowerarm_r", "hand_r",
+		"thumb_01_r", "thumb_02_r", "thumb_03_r",
+		"index_01_r", "index_02_r", "index_03_r",
+		"middle_01_r", "middle_02_r", "middle_03_r",
+		"ring_01_r", "ring_02_r", "ring_03_r",
+		"pinky_01_r", "pinky_02_r", "pinky_03_r",
+	]
+	_rotate_arm_chain_to_down(skeleton, left_chain)
+	_rotate_arm_chain_to_down(skeleton, right_chain)
+
+
+func _rotate_arm_chain_to_down(skeleton: Skeleton3D, chain: PackedStringArray) -> void:
+	if chain.is_empty():
+		return
+	var shoulder_idx: int = skeleton.find_bone(chain[0])
+	if shoulder_idx < 0:
+		return
+	var hand_idx: int = skeleton.find_bone(chain[min(2, chain.size() - 1)])
+	if hand_idx < 0:
+		hand_idx = skeleton.find_bone(chain[chain.size() - 1])
+	if hand_idx < 0:
+		return
+	var shoulder_pose: Transform3D = skeleton.get_bone_global_pose(shoulder_idx)
+	var hand_pose: Transform3D = skeleton.get_bone_global_pose(hand_idx)
+	var arm_vec: Vector3 = (hand_pose.origin - shoulder_pose.origin).normalized()
+	if arm_vec.length() < 0.0001:
+		return
+	var target: Vector3 = Vector3.DOWN
+	var axis: Vector3 = arm_vec.cross(target)
+	var angle: float = arm_vec.angle_to(target)
+	if axis.length() < 0.0001 or angle < 0.0001:
+		return
+	axis = axis.normalized()
+	var rot: Basis = Basis(axis, angle)
+	var pivot: Vector3 = shoulder_pose.origin
+	for bone_name: String in chain:
+		var bone_idx: int = skeleton.find_bone(bone_name)
+		if bone_idx < 0:
+			continue
+		var pose: Transform3D = skeleton.get_bone_global_pose(bone_idx)
+		var offset: Vector3 = pose.origin - pivot
+		var new_origin: Vector3 = pivot + rot * offset
+		var new_basis: Basis = rot * pose.basis
+		skeleton.set_bone_global_pose_override(bone_idx, Transform3D(new_basis, new_origin), 1.0, true)
+
+
+func _find_skeleton(root: Node) -> Skeleton3D:
+	if root is Skeleton3D:
+		return root as Skeleton3D
+	for child: Node in root.get_children():
+		var found: Skeleton3D = _find_skeleton(child)
+		if found != null:
+			return found
+	return null
+
+
+func _extract_named_model(scene_root: Node3D, target_name: String) -> Node3D:
+	var target_lower: String = target_name.to_lower()
+	var found: Node3D = null
+	for child: Node in scene_root.get_children():
+		if child is Node3D and child.name.to_lower().contains(target_lower):
+			found = child as Node3D
+			break
+	if found == null:
+		return null
+	if found == scene_root:
+		return found
+	var parent: Node = found.get_parent()
+	if parent != null:
+		parent.remove_child(found)
+	scene_root.queue_free()
+	return found
+
+
+func _clear_owner_recursive(node: Node) -> void:
+	if node == null:
+		return
+	if node.owner != null:
+		node.owner = null
+	for child: Node in node.get_children():
+		_clear_owner_recursive(child)
 
 
 ## Recursively remove CollisionShape3D, StaticBody3D, RigidBody3D, etc.

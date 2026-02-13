@@ -91,6 +91,9 @@ const BREATHING: Dictionary = {
 # ── State ────────────────────────────────────────────────────────────────────
 var _profile: CharacterProfile = null
 var _animator: Node = null  # RagdollAnimator — typed loosely to avoid load order
+var _attention: NPCAttention = null
+var _constriction: Node = null  # ConstrictionSystem — typed loosely to avoid load order
+var _npc_root: Node3D = null
 var _current_offsets: Dictionary = {}
 var _target_offsets: Dictionary = {}
 var _blend_progress: float = 1.0
@@ -98,18 +101,32 @@ var _blend_duration: float = 0.8
 var _breath_time: float = 0.0
 var _tremble_time: float = 0.0
 var _current_expression: String = "neutral"
+var _head_yaw: float = 0.0
+var _head_pitch: float = 0.0
 
 ## How strongly body language offsets are applied (0 = off, 1 = full).
 @export_range(0.0, 1.0) var influence: float = 0.8
 ## Tremble intensity multiplier for the overwhelmed state.
 @export_range(0.0, 5.0) var tremble_intensity: float = 2.0
 
+@export_group("Head Tracking")
+@export var head_track_enabled: bool = true
+@export var head_track_strength: float = 0.8
+@export var head_track_max_yaw: float = 35.0
+@export var head_track_max_pitch: float = 20.0
+@export var head_track_smoothing: float = 6.0
+
 
 func _ready() -> void:
+	_npc_root = get_parent() as Node3D
 	for sibling: Node in get_parent().get_children():
 		if sibling is CharacterProfile:
 			_profile = sibling as CharacterProfile
 			_profile.emotional_state_changed.connect(_on_emotional_state_changed)
+		elif sibling is NPCAttention:
+			_attention = sibling as NPCAttention
+		elif sibling.get_script() != null and sibling.has_method(&"_update_airway"):
+			_constriction = sibling
 		elif sibling.get_class() == "Node" and sibling.has_method(&"set_pose"):
 			_animator = sibling
 	# Also check script class
@@ -123,6 +140,8 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if _profile == null:
 		return
+	if _attention == null:
+		_resolve_attention()
 
 	# Blend toward target offsets
 	if _blend_progress < 1.0:
@@ -133,6 +152,12 @@ func _physics_process(delta: float) -> void:
 		_profile.current_state, BREATHING[CharacterProfile.EmotionalState.NEUTRAL]) as Dictionary
 	var amp: float = breath_params["amplitude"] as float
 	var freq: float = breath_params["frequency"] as float
+
+	# Apply constriction breathing overrides
+	if _constriction != null:
+		amp *= _constriction.breath_amplitude_override
+		freq *= _constriction.breath_frequency_override
+
 	_breath_time += delta
 	var breath_offset: float = sin(_breath_time * freq * TAU) * amp
 
@@ -166,6 +191,8 @@ func _physics_process(delta: float) -> void:
 				"right_hand_to_right_fingers", "spine_mid_to_spine_upper"]:
 			var val: Vector3 = frame_offsets.get(joint_key, Vector3.ZERO) as Vector3
 			frame_offsets[joint_key] = val + tremble_offset
+
+	_apply_head_tracking(frame_offsets, delta)
 
 	# Apply offsets to animator if available
 	if _animator != null and _animator.has_method(&"apply_offset_layer"):
@@ -220,6 +247,41 @@ func _get_offsets_for_state(state: CharacterProfile.EmotionalState) -> Dictionar
 	return IDLE_NEUTRAL.duplicate()
 
 
+func _apply_head_tracking(frame_offsets: Dictionary, delta: float) -> void:
+	var target_yaw: float = 0.0
+	var target_pitch: float = 0.0
+	if head_track_enabled and _attention != null and _npc_root != null:
+		if _attention.is_focused_on_player() and _attention.is_player_moving_recently():
+			var dir: Vector3 = _attention.look_direction
+			if dir.length_squared() > 0.001:
+				var local_dir: Vector3 = _npc_root.global_basis.inverse() * dir
+				target_yaw = rad_to_deg(atan2(local_dir.x, -local_dir.z))
+				target_pitch = rad_to_deg(atan2(local_dir.y, -local_dir.z))
+				target_yaw = clampf(target_yaw, -head_track_max_yaw, head_track_max_yaw)
+				target_pitch = clampf(target_pitch, -head_track_max_pitch, head_track_max_pitch)
+	var t: float = clampf(delta * head_track_smoothing, 0.0, 1.0)
+	_head_yaw = lerpf(_head_yaw, target_yaw, t)
+	_head_pitch = lerpf(_head_pitch, target_pitch, t)
+	if absf(_head_yaw) < 0.01 and absf(_head_pitch) < 0.01:
+		return
+	var neck_key: String = "neck_to_head"
+	var neck_val: Vector3 = frame_offsets.get(neck_key, Vector3.ZERO) as Vector3
+	neck_val.y += _head_yaw * head_track_strength
+	neck_val.x += -_head_pitch * head_track_strength
+	frame_offsets[neck_key] = neck_val
+	var chest_key: String = "chest_to_neck"
+	var chest_val: Vector3 = frame_offsets.get(chest_key, Vector3.ZERO) as Vector3
+	chest_val.y += _head_yaw * head_track_strength * 0.35
+	frame_offsets[chest_key] = chest_val
+
+
 func _smoothstep(t: float) -> float:
 	var x: float = clampf(t, 0.0, 1.0)
 	return x * x * (3.0 - 2.0 * x)
+
+
+func _resolve_attention() -> void:
+	for sibling: Node in get_parent().get_children():
+		if sibling is NPCAttention:
+			_attention = sibling as NPCAttention
+			return

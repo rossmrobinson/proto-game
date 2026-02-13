@@ -1,4 +1,4 @@
-[gd_resource type="RagdollDebugConfig" script_class="RagdollDebugConfig" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="RagdollDebugConfig" load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://scripts/systems/ragdoll_debug_config.gd" id="1"]
 
@@ -19,5 +19,13 @@ max_offset = 0.02
 max_linear_velocity = 2.0
 max_angular_velocity = 10.0
 max_penetration = 0.01
+max_joint_error_deg = 25.0
+max_unmatched_bones = 0
 log_frames = 120
-log_dir = "user://logs"
+log_dir = "J:/proto-game/single-room/logs"
+auto_snapshot_on_issue = false
+log_use_timestamped_files = false
+log_max_files_per_npc = 2
+log_max_age_days = 2
+snapshot_max_files = 10
+pose_report_max_files = 10

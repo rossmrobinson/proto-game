@@ -10,21 +10,23 @@ if (-not $python) {
 
 $errors = 0
 
-function Run-Scanner {
-    param([string]$Script)
-    Write-Host "Running $Script"
-    & $python "$PSScriptRoot/$Script" --root $project
+$scanners = @(
+    "bone-map-alignment-scan.py"
+    "hardcoded-values-scan.py"
+    "layer-mask-audit.py"
+    "unused-resource-scan.py"
+    "todo-tracker.py"
+    "complexity-scan.py"
+    "scene-validator.py"
+)
+
+foreach ($scanner in $scanners) {
+    Write-Host "Running $scanner"
+    & $python "$PSScriptRoot/$scanner" --root $project
     if ($LASTEXITCODE -ne 0) {
-        $script:errors = 1
+        $errors = 1
     }
 }
-
-Run-Scanner "hardcoded-values-scan.py"
-Run-Scanner "layer-mask-audit.py"
-Run-Scanner "unused-resource-scan.py"
-Run-Scanner "todo-tracker.py"
-Run-Scanner "complexity-scan.py"
-Run-Scanner "scene-validator.py"
 
 if ($env:GODOT_PATH) {
     Write-Host "Running Godot check"

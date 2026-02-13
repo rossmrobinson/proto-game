@@ -18,6 +18,11 @@ config/icon="res://icon.svg"
 [autoload]
 
 RagdollDiagnostics="*res://scripts/systems/ragdoll_diagnostics.gd"
+NetworkConfig="*res://config/network-config.gd"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/llm_diagnostics/plugin.cfg")
 
 [input]
 
@@ -66,6 +71,16 @@ cycle_command_target={
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":96,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
 ]
 }
+toggle_sleep={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":75,"key_label":0,"unicode":107,"location":0,"echo":false,"script":null)
+]
+}
+respawn_npcs={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":82,"key_label":0,"unicode":114,"location":0,"echo":false,"script":null)
+]
+}
 
 [layer_names]
 
@@ -76,6 +91,7 @@ cycle_command_target={
 3d_physics/layer_5="NPC_SoftTissue"
 3d_physics/layer_6="NPC_Internal"
 3d_physics/layer_7="Equipment"
+3d_physics/layer_8="NPC_FineMotor"
 
 [physics]
 

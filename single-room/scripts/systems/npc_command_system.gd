@@ -35,6 +35,9 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed(&"cycle_command_target"):
 		cycle()
+	if event.is_action_pressed(&"toggle_sleep"):
+		if commanded_npc != null:
+			commanded_npc.set_sleeping(commanded_npc.is_awake)
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
@@ -84,6 +87,26 @@ func get_command_label() -> String:
 	if commanded_npc == null:
 		return "Self"
 	return commanded_npc.npc_name
+
+
+## Force the commanded NPC into a limp, inspectable state.
+func sleep_commanded() -> void:
+	if commanded_npc == null:
+		return
+	commanded_npc.set_sleeping(true)
+
+
+## Wake the commanded NPC from a limp state.
+func wake_commanded() -> void:
+	if commanded_npc == null:
+		return
+	commanded_npc.set_sleeping(false)
+
+
+func set_commanded_sleeping(sleeping: bool) -> void:
+	if commanded_npc == null:
+		return
+	commanded_npc.set_sleeping(sleeping)
 
 
 ## Force a re-scan of NPCs in the scene (call after spawning/removing NPCs).

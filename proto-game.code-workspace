@@ -16,14 +16,76 @@
         },
         "files.exclude": {
             "**/.godot": true,
-            "**/*.import": true
+            "**/*.import": true,
+            "**/*.blend": true,
+            "**/*.gguf": true,
+            "**/.venv": true,
+            "**/__pycache__": true,
+            "llm-models": true,
+            "single-room/logs": true,
+            "single-room/assets/models": true,
+            "single-room/assets/mh-assets": true,
+            "single-room/tools/tts": true,
+            "single-room/tools/tts/.venv": true
         },
         "search.exclude": {
-            "**/.godot": true
+            "**/.godot": true,
+            "**/.venv/**": true,
+            "**/__pycache__/**": true,
+            "**/llm-models/**": true,
+            "**/single-room/tools/tts/**": true,
+            "**/single-room/tools/tts/.venv/**": true,
+            "**/single-room/logs/**": true,
+            "**/single-room/assets/models/**": true,
+            "**/single-room/assets/mh-assets/**": true,
+            "**/single-room/assets/textures/**": true,
+            "**/*.blend": true,
+            "**/*.gguf": true
         },
+        "files.watcherExclude": {
+            "**/.git/objects/**": true,
+            "**/.git/subtree-cache/**": true,
+            "**/.godot/**": true,
+            "**/.venv/**": true,
+            "**/__pycache__/**": true,
+            "**/llm-models/**": true,
+            "**/single-room/tools/tts/**": true,
+            "**/single-room/tools/tts/.venv/**": true,
+            "**/single-room/logs/**": true,
+            "**/single-room/assets/models/**": true,
+            "**/single-room/assets/mh-assets/**": true,
+            "**/single-room/assets/textures/**": true,
+            "**/*.blend": true,
+            "**/*.gguf": true
+        },
+        "python.analysis.exclude": [
+            "**/.godot/**",
+            "**/.venv/**",
+            "**/__pycache__/**",
+            "**/llm-models/**",
+            "**/single-room/tools/tts/**",
+            "**/single-room/tools/tts/.venv/**",
+            "**/single-room/logs/**",
+            "**/single-room/assets/mh-assets/**",
+            "**/single-room/assets/**"
+        ],
+        "search.followSymlinks": false,
+        "files.maxMemoryForLargeFilesMB": 32,
+        "python.analysis.diagnosticMode": "openFilesOnly",
+        "python.analysis.indexing": false,
+        "python.analysis.userFileIndexingLimit": 500,
+        "chat.mcp.access": false,
+        "chat.mcp.discovery.enabled": {
+            "claude-desktop": false,
+            "windsurf": false,
+            "cursor-global": false,
+            "cursor-workspace": false
+        },
+        "chat.agent.maxRequests": 50,
         "[gdscript]": {
             "editor.tabSize": 4,
             "editor.insertSpaces": false
-        }
+        },
+        "godotTools.editorPath.godot4": "j:\\Godot\\Godot_v4.6-stable_win64_console.exe"
     }
 }

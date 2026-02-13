@@ -5,6 +5,7 @@
 [ext_resource type="Script" path="res://scripts/systems/diagnostics_overlay.gd" id="3_diag"]
 [ext_resource type="Environment" path="res://scenes/default_env.tres" id="4_env"]
 [ext_resource type="Script" path="res://scripts/systems/ragdoll_scenario_runner.gd" id="5_runner"]
+[ext_resource type="Script" path="res://scripts/systems/ragdoll_parameter_sweep.gd" id="6_sweep"]
 
 [node name="RagdollDualTest" type="Node3D"]
 
@@ -28,3 +29,6 @@ script = ExtResource("3_diag")
 
 [node name="RagdollScenarioRunner" type="Node" parent="."]
 script = ExtResource("5_runner")
+
+[node name="RagdollParameterSweep" type="Node" parent="."]
+script = ExtResource("6_sweep")

@@ -11,11 +11,25 @@ ASSET_EXTS = {
 }
 
 REF_EXTS = {".gd", ".tscn", ".tres", ".cfg", ".ini", ".json", ".godot"}
+EXCLUDED_PARTS = {
+    ".godot",
+    "addons",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    "node_modules",
+    "logs",
+    "llm-models",
+    ".git",
+    "tools",
+}
 
 
 def should_skip(path: Path) -> bool:
     parts = set(path.parts)
-    return ".godot" in parts or "addons" in parts or "tools" in parts
+    return any(part in EXCLUDED_PARTS for part in parts)
 
 
 def collect_references(root: Path) -> set[str]:
@@ -45,6 +59,8 @@ def main() -> int:
     if assets_root.exists():
         for path in assets_root.rglob("*"):
             if path.is_dir() or path.suffix not in ASSET_EXTS:
+                continue
+            if "mh-assets" in path.parts:
                 continue
             res_path = f"res://{path.relative_to(root).as_posix()}"
             if res_path not in refs:

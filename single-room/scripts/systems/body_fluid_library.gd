@@ -51,6 +51,39 @@ static func get_fluid(fluid_name: String) -> FluidType:
 	return null
 
 
+# ── Convenience Accessors ────────────────────────────────────────────────────
+
+static func semen() -> FluidType:
+	return _semen()
+
+static func pre_ejaculate() -> FluidType:
+	return _pre_ejaculate()
+
+static func vaginal_fluid() -> FluidType:
+	return _vaginal_fluid()
+
+static func cervical_mucus() -> FluidType:
+	return _cervical_mucus()
+
+static func saliva() -> FluidType:
+	return _saliva()
+
+static func sweat() -> FluidType:
+	return _sweat()
+
+static func tears() -> FluidType:
+	return _tears()
+
+static func blood() -> FluidType:
+	return _blood()
+
+static func breast_milk() -> FluidType:
+	return _breast_milk()
+
+static func urine() -> FluidType:
+	return _urine()
+
+
 # ── Blood & Circulatory ──────────────────────────────────────────────────────
 
 static func _blood() -> FluidType:
@@ -181,6 +214,10 @@ static func _saliva() -> FluidType:
 		"can_streak": true,
 		"can_splash": true,
 		"sound_volume": 0.2,
+		"can_form_strings": true,
+		"string_max_length": 0.12,
+		"string_viscosity_threshold": 0.1,
+		"miscibility": 0.7,
 	})
 
 
@@ -361,6 +398,10 @@ static func _semen() -> FluidType:
 		"can_streak": true,
 		"can_splash": true,
 		"sound_volume": 0.25,
+		"can_form_strings": true,
+		"string_max_length": 0.2,
+		"string_viscosity_threshold": 0.15,
+		"miscibility": 0.6,
 	})
 
 
@@ -384,6 +425,10 @@ static func _pre_ejaculate() -> FluidType:
 		"can_streak": true,
 		"can_splash": false,
 		"sound_volume": 0.05,
+		"can_form_strings": true,
+		"string_max_length": 0.08,
+		"string_viscosity_threshold": 0.2,
+		"miscibility": 0.8,
 	})
 
 
@@ -407,6 +452,7 @@ static func _vaginal_fluid() -> FluidType:
 		"can_streak": true,
 		"can_splash": false,
 		"sound_volume": 0.1,
+		"miscibility": 0.7,
 	})
 
 
@@ -428,6 +474,10 @@ static func _cervical_mucus() -> FluidType:
 		"can_streak": true,
 		"can_splash": false,
 		"sound_volume": 0.05,
+		"can_form_strings": true,
+		"string_max_length": 0.25,
+		"string_viscosity_threshold": 0.15,
+		"miscibility": 0.5,
 	})
 
 

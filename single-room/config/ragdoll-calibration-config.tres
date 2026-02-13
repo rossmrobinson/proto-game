@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="RagdollCalibrationConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/ragdoll_calibration_config.gd" id="1"]
+
+[resource]
+enabled = true
+auto_start = true
+npc_name = "Ada"
+pose_name = ""
+pose_settle_seconds = 0.5
+baseline_hold_seconds = 0.2
+run_seconds = 3.0
+sample_interval = 0.1
+iterations = 3
+max_report_parts = 10
+log_dir = "J:/proto-game/single-room/logs"
+overrides_path = "J:/proto-game/single-room/logs/llm_overrides.json"
+log_max_files = 5
+log_max_age_days = 2
+auto_apply_suggestions = false
+suggest_min_drift_z = 0.05
+suggest_scale = 1.0
+suggest_max_step = 0.6
+suggest_parts = PackedStringArray("chest", "left_lower_leg", "right_lower_leg", "left_foot", "right_foot", "left_toes", "right_toes")

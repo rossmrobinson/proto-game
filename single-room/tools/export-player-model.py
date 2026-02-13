@@ -1,4 +1,4 @@
-"""
+r"""
 Export Player1 from room1-models.blend as a standalone .glb for Godot.
 
 HOW TO USE:

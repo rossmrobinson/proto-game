@@ -1,0 +1,20 @@
+{
+  "overrides": {
+    "spring_damping": 48.0,
+    "angular_damping": 14.0,
+    "passive_damp_multiplier": 3.0,
+    "recover_linear_threshold": 0.3,
+    "recover_angular_threshold": 1.5,
+    "extra_leg_linear_damp": 0.25,
+    "extra_leg_angular_damp": 0.35,
+    "extra_foot_linear_damp": 0.3,
+    "extra_foot_angular_damp": 0.4,
+    "active_sleep_linear_threshold": 0.05,
+    "active_sleep_angular_threshold": 0.08,
+    "passive_sleep_linear_threshold": 0.08,
+    "passive_sleep_angular_threshold": 0.12,
+    "passive_motor_floor": 0.3,
+    "passive_limb_scale": 0.35,
+    "passive_joint_scale": 0.1
+  }
+}

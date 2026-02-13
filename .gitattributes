@@ -1,0 +1,34 @@
+# Normalize text files in repo
+* text=auto
+
+# Godot project files (must stay LF)
+*.gd text eol=lf
+*.uid text eol=lf
+*.tscn text eol=lf
+*.tres text eol=lf
+*.godot text eol=lf
+
+# Tooling/scripts/docs
+*.py text eol=lf
+*.ps1 text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.tif binary
+*.tiff binary
+*.bmp binary
+*.glb binary
+*.blend binary
+*.ogg binary
+*.wav binary
+*.mp3 binary
+*.ttf binary
+*.otf binary
+*.zip binary
+*.7z binary
+*.dll binary
+*.exe binary

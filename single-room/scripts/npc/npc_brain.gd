@@ -55,6 +55,7 @@ var _profile: CharacterProfile = null
 var _nerve: NerveSystem = null
 var _behavior: NPCBehavior = null
 var _body_language: BodyLanguageSystem = null
+var _intent: NPCInteractionIntent = null
 
 # ── Internal State ───────────────────────────────────────────────────────────
 ## Whether the NPC is currently being commanded by the player.
@@ -294,6 +295,29 @@ func _randomize_idle_timer() -> void:
 	_next_idle_speak = maxf(_next_idle_speak, 3.0)
 
 
+## Derive claim priority from personality traits.
+## Aggressive / high-defiance NPCs get AGGRESSIVE, timid ones get TIMID.
+func get_claim_priority() -> InteractionClaimSystem.ClaimPriority:
+	if defiance > 0.7:
+		return InteractionClaimSystem.ClaimPriority.AGGRESSIVE
+	if touch_openness > 0.7 and nervousness < 0.3:
+		return InteractionClaimSystem.ClaimPriority.EAGER
+	if nervousness > 0.6:
+		return InteractionClaimSystem.ClaimPriority.TIMID
+	return InteractionClaimSystem.ClaimPriority.NORMAL
+
+
+## Derive approach style from personality.
+func get_approach_style() -> NPCInteractionIntent.ApproachStyle:
+	if defiance > 0.7:
+		return NPCInteractionIntent.ApproachStyle.SHOVE
+	if defiance > 0.4:
+		return NPCInteractionIntent.ApproachStyle.NUDGE
+	if nervousness > 0.6:
+		return NPCInteractionIntent.ApproachStyle.YIELD
+	return NPCInteractionIntent.ApproachStyle.WAIT
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 #  WIRING — connects to all sibling subsystems
 # ═════════════════════════════════════════════════════════════════════════════
@@ -319,6 +343,8 @@ func _wire_subsystems() -> void:
 			_behavior = child as NPCBehavior
 		elif child is BodyLanguageSystem:
 			_body_language = child as BodyLanguageSystem
+		elif child is NPCInteractionIntent:
+			_intent = child as NPCInteractionIntent
 
 	# Connect NerveSystem events
 	if _nerve != null:
@@ -363,6 +389,8 @@ func _wire_subsystems() -> void:
 		found.append("Behavior")
 	if _body_language != null:
 		found.append("BodyLang")
+	if _intent != null:
+		found.append("Intent")
 	print("[NPCBrain] %s wired: %s" % [_npc.npc_name, ", ".join(found)])
 
 

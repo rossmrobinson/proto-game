@@ -1,4 +1,4 @@
-"""
+r"""
 Batch Voice Line Generator for Proto-Game
 ==========================================
 Reads voice_lines.json, generates .wav files via Kokoro TTS,
