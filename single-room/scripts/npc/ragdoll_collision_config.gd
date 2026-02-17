@@ -1,8 +1,6 @@
 class_name RagdollCollisionConfig
 extends RefCounted
 
-const RAGDOLL_PROPORTIONS = preload("res://scripts/npc/ragdoll_proportions.gd")
-
 ## Add collision exceptions between ALL body parts in this ragdoll.
 ## At 66 parts per NPC, intra-ragdoll collisions cause severe jitter and
 ## explosion when parts overlap at spawn. Non-adjacent self-collision
@@ -22,16 +20,14 @@ static func apply_collision_exclusions(parts: Dictionary) -> void:
 ## pushed together and physically squeeze around objects between them.
 ## Must be called AFTER apply_collision_exclusions().
 static func restore_breast_collisions(parts: Dictionary) -> void:
-	var left_names: PackedStringArray = [
-		"left_breast_inner", "left_breast_outer",
-		"left_breast_upper", "left_breast_lower",
-		"left_breast_nipple",
-	]
-	var right_names: PackedStringArray = [
-		"right_breast_inner", "right_breast_outer",
-		"right_breast_upper", "right_breast_lower",
-		"right_breast_nipple",
-	]
+	BodyPartRegistry.ensure_loaded()
+	var left_names: PackedStringArray = PackedStringArray()
+	var right_names: PackedStringArray = PackedStringArray()
+	for breast_part_name: String in BodyPartRegistry.get_parts_by_group("breast"):
+		if breast_part_name.begins_with("left_"):
+			left_names.append(breast_part_name)
+		elif breast_part_name.begins_with("right_"):
+			right_names.append(breast_part_name)
 	# Every left breast part can collide with every right breast part.
 	for l_name: String in left_names:
 		for r_name: String in right_names:
@@ -46,11 +42,14 @@ static func restore_breast_collisions(parts: Dictionary) -> void:
 ## internal passage parts on the SAME NPC.  This allows self-insertion.
 ## Must be called AFTER apply_collision_exclusions().
 static func restore_self_touch_collisions(parts: Dictionary) -> void:
-	for fine_name: String in RAGDOLL_PROPORTIONS.FINE_MOTOR_PARTS:
+	BodyPartRegistry.ensure_loaded()
+	var fine_motor_parts: PackedStringArray = BodyPartRegistry.get_fine_motor_parts()
+	var internal_parts: PackedStringArray = BodyPartRegistry.get_internal_parts()
+	for fine_name: String in fine_motor_parts:
 		if not parts.has(fine_name):
 			continue
 		var fine: BodyPart = parts[fine_name] as BodyPart
-		for int_name: String in RAGDOLL_PROPORTIONS.INTERNAL_PARTS:
+		for int_name: String in internal_parts:
 			if not parts.has(int_name):
 				continue
 			var internal: BodyPart = parts[int_name] as BodyPart
@@ -62,14 +61,17 @@ static func restore_self_touch_collisions(parts: Dictionary) -> void:
 ## SAME NPC.  This allows self-penetration when the player grabs and guides
 ## the penis.  Must be called AFTER apply_collision_exclusions().
 static func restore_penis_passage_collisions(parts: Dictionary) -> void:
-	const PENIS_PARTS: PackedStringArray = [
-		"penis_base", "penis_mid", "penis_tip",
-	]
-	for p_name: String in PENIS_PARTS:
+	BodyPartRegistry.ensure_loaded()
+	var penis_parts: PackedStringArray = PackedStringArray()
+	for groin_part_name: String in BodyPartRegistry.get_parts_by_group("groin_male"):
+		if groin_part_name.begins_with("penis_"):
+			penis_parts.append(groin_part_name)
+	var internal_parts: PackedStringArray = BodyPartRegistry.get_internal_parts()
+	for p_name: String in penis_parts:
 		if not parts.has(p_name):
 			continue
 		var penis_part: BodyPart = parts[p_name] as BodyPart
-		for int_name: String in RAGDOLL_PROPORTIONS.INTERNAL_PARTS:
+		for int_name: String in internal_parts:
 			if not parts.has(int_name):
 				continue
 			var internal: BodyPart = parts[int_name] as BodyPart
@@ -83,7 +85,8 @@ static func restore_penis_passage_collisions(parts: Dictionary) -> void:
 ## (penis, fingers) can push them open during penetration.
 static func assign_internal_layers(parts: Dictionary) -> void:
 	for part_name_key: String in parts:
-		if part_name_key in RAGDOLL_PROPORTIONS.INTERNAL_PARTS:
+		var config: Dictionary = BodyPartRegistry.get_part_config(part_name_key)
+		if str(config.get("collision_layer", "external")) == "internal":
 			var part: BodyPart = parts[part_name_key] as BodyPart
 			# Clear external layers
 			part.collision_layer = 0
@@ -103,7 +106,8 @@ static func assign_internal_layers(parts: Dictionary) -> void:
 ## can physically push open passage walls during cross-NPC penetration.
 static func assign_soft_tissue_layers(parts: Dictionary) -> void:
 	for part_name_key: String in parts:
-		if part_name_key in RAGDOLL_PROPORTIONS.SOFT_TISSUE_PARTS:
+		var config: Dictionary = BodyPartRegistry.get_part_config(part_name_key)
+		if str(config.get("collision_layer", "external")) == "soft_tissue":
 			var part: BodyPart = parts[part_name_key] as BodyPart
 			# Move off NPC_External (3), onto NPC_SoftTissue (5).
 			# Keep Interactable (4) so targeting/grab queries still find them.
@@ -127,7 +131,8 @@ static func assign_soft_tissue_layers(parts: Dictionary) -> void:
 ## also gains layer 6 so fine motor parts see passage walls.
 static func assign_fine_motor_layers(parts: Dictionary) -> void:
 	for part_name_key: String in parts:
-		if part_name_key in RAGDOLL_PROPORTIONS.FINE_MOTOR_PARTS:
+		var config: Dictionary = BodyPartRegistry.get_part_config(part_name_key)
+		if str(config.get("collision_layer", "external")) == "fine_motor":
 			var part: BodyPart = parts[part_name_key] as BodyPart
 			part.set_collision_layer_value(8, true)  # NPC_FineMotor
 			part.set_collision_mask_value(6, true)   # NPC_Internal (passages)

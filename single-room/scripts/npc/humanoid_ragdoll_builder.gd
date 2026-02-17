@@ -207,8 +207,6 @@ func _build_face(h: float) -> void:
 			t_pos,
 			_capsule_shape(tongue_r * t_r_scale, tongue_seg_len),
 			0.3 * mass_scale, 0.1, false, false, false)
-		tongue_seg.linear_damp = 6.0
-		tongue_seg.angular_damp = 8.0
 
 		_create_soft_joint(prev_tongue, tongue_seg,
 			tongue_joint_pos,
@@ -981,8 +979,6 @@ func _create_passage_chain(passage_name: String, anchor_part: BodyPart,
 		var ring_part: BodyPart = _create_part(ring_part_name, ring_display,
 			ring_pos, _sphere_shape(ring_radius),
 			0.3 * mass_scale, 0.1, false, false, false)
-		ring_part.linear_damp = 10.0
-		ring_part.angular_damp = 12.0
 
 		# Stiff spring to anchor — entrance ring resists but yields to pressure
 		_create_soft_joint(anchor_part, ring_part, start_pos + q_offsets[q_idx] * 0.5,
@@ -1008,10 +1004,6 @@ func _create_passage_chain(passage_name: String, anchor_part: BodyPart,
 			var seg: BodyPart = _create_part(seg_name, seg_display, seg_pos,
 				_capsule_shape(seg_radius * 0.5, seg_length),
 				0.3 * mass_scale, 0.1, false, false, false)
-
-			# High damping for internal tissue
-			seg.linear_damp = 8.0
-			seg.angular_damp = 10.0
 
 			# Joint to previous depth (same quadrant) — soft spring return
 			var joint_pos: Vector3 = start_pos + forward * seg_length * (depth + 0.5) + q_offsets[q_idx]

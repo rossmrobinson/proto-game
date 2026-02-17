@@ -482,6 +482,18 @@ func _build_joint_mapping() -> void:
 ## and freeze them so Jolt doesn't disturb them during the settle period.
 ## Called once at bind time.
 func _snap_parts_to_bones() -> void:
+	# Pre-calculate offsets before ANY part moves.
+	# Joint positions depend on parent parts, which might move during the loop.
+	var part_offsets: Dictionary = {}
+	for bone_idx: int in _bone_to_part:
+		if _bone_to_joint.has(bone_idx):
+			var p: BodyPart = _bone_to_part[bone_idx] as BodyPart
+			var j: Generic6DOFJoint3D = _bone_to_joint[bone_idx] as Generic6DOFJoint3D
+			# Vector pointing from Joint to Part Center, in Part's local space.
+			# Local space is rotation-invariant if Part and Skeleton rotation match.
+			var offset_local: Vector3 = p.global_transform.basis.inverse() * (p.global_transform.origin - j.global_transform.origin)
+			part_offsets[bone_idx] = offset_local
+
 	for bone_idx: int in _bone_to_part:
 		var part: BodyPart = _bone_to_part[bone_idx] as BodyPart
 		# Use _rest_poses (idle-adjusted) when available, otherwise raw skeleton pose
@@ -490,7 +502,28 @@ func _snap_parts_to_bones() -> void:
 			bone_global = skeleton.global_transform * _rest_poses[bone_idx]
 		else:
 			bone_global = skeleton.global_transform * skeleton.get_bone_global_pose(bone_idx)
-		part.global_transform = bone_global
+		
+		# CRITICAL FIX: The Ragdoll part center is NOT at the joint (bone start).
+		# It is offset by half its length (or similar).
+		# The Joint (Generic6DOFJoint3D) is at the bone start.
+		# We must maintain the relative offset between Part and Joint.
+		var joint: Generic6DOFJoint3D = null
+		if _bone_to_joint.has(bone_idx):
+			joint = _bone_to_joint[bone_idx] as Generic6DOFJoint3D
+		
+		# If we have a joint, we can calculate the correct offset.
+		# If not (e.g. Pelvis), bone_global center is likely correct (or close enough).
+		if joint != null and part_offsets.has(bone_idx):
+			var final_offset: Vector3 = part_offsets[bone_idx]
+			
+			# Apply to new bone pose
+			# New Part Pos = Bone Pos + (Bone Basis * offset_local)
+			var new_origin: Vector3 = bone_global.origin + (bone_global.basis * final_offset)
+			part.global_transform = Transform3D(bone_global.basis, new_origin)
+		else:
+			# Fallback for root/pelvis
+			part.global_transform = bone_global
+
 		part.linear_velocity = Vector3.ZERO
 		part.angular_velocity = Vector3.ZERO
 		# Actually freeze the RigidBody3D so Jolt ignores it during settle
@@ -1059,6 +1092,7 @@ func _log_arm_pose_metrics() -> void:
 
 
 func _report_diag_event(tag: String) -> void:
+	return # Disabled to prevent log spam/crash
 	if _diag == null:
 		return
 	_diag.report_event(self, tag)

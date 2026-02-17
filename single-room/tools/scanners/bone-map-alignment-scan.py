@@ -5,7 +5,9 @@ Checks:
 1) `ragdoll_proportions.gd` BONE_NAME_MAP matches
    `blender-rig-dump.py` GODOT_BONE_NAME_MAP (including generated passage keys).
 2) All bones created by `blender-add-soft-tissue-bones.py` are present in
-   Godot BONE_NAME_MAP and map to themselves.
+    Godot BONE_NAME_MAP and map to themselves.
+    If that tool file is missing, fall back to `blender-rig-dump.py`
+    CUSTOM_SOFT_TISSUE_BONES declarations.
 
 Exit code 0 on success, 1 on any drift.
 """
@@ -91,6 +93,28 @@ def _expected_custom_soft_tissue_bones(add_soft_tissue_content: str) -> set[str]
     return names
 
 
+def _expected_custom_soft_tissue_bones_from_rig_dump(rig_dump_content: str) -> set[str]:
+    set_match = re.search(r"CUSTOM_SOFT_TISSUE_BONES\s*:\s*set\[str\]\s*=\s*\{(.*?)\n\}", rig_dump_content, re.S)
+    if set_match is None:
+        raise ValueError("Could not find CUSTOM_SOFT_TISSUE_BONES in blender-rig-dump.py")
+    names: set[str] = set(re.findall(r'"([^\"]+)"', set_match.group(1)))
+
+    for tunnel in ("vaginal", "anal"):
+        for quadrant in ("top", "bot", "left", "right"):
+            names.add(f"{tunnel}_ring_{quadrant}")
+        for depth in range(8):
+            for quadrant in ("top", "bot", "left", "right"):
+                names.add(f"{tunnel}_passage_{depth}_{quadrant}")
+
+    for quadrant in ("top", "bot", "left", "right"):
+        names.add(f"oral_ring_{quadrant}")
+    for depth in range(5):
+        for quadrant in ("top", "bot", "left", "right"):
+            names.add(f"oral_passage_{depth}_{quadrant}")
+
+    return names
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate Godot/Blender bone-map alignment")
     parser.add_argument("--root", required=True, help="Project root path")
@@ -125,7 +149,10 @@ def main() -> int:
         preview = ", ".join(f"{k}=>{gd_map[k]}/{rig_dump_map[k]}" for k in mismatched_values[:12])
         errors.append(f"Map value mismatches ({len(mismatched_values)}): {preview}")
 
-    custom_expected = _expected_custom_soft_tissue_bones(_read(add_soft_tissue_path))
+    if add_soft_tissue_path.exists():
+        custom_expected = _expected_custom_soft_tissue_bones(_read(add_soft_tissue_path))
+    else:
+        custom_expected = _expected_custom_soft_tissue_bones_from_rig_dump(_read(rig_dump_path))
     missing_custom = sorted(name for name in custom_expected if gd_map.get(name) != name)
     if missing_custom:
         errors.append(
