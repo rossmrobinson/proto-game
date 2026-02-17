@@ -37,9 +37,14 @@ var _chat_history: Array[String] = []
 var _memory_summary: String = ""
 var _memory_notes: Array[String] = []
 
-var _spike_active: bool = false
-var _spike_end_time: float = 0.0
+enum SpikePhase { NONE, BUILDUP, PEAK, AFTERGLOW, REFRACTORY }
+var _spike_phase: SpikePhase = SpikePhase.NONE
+var _spike_phase_timer: float = 0.0
 var _spike_cooldown_until: float = 0.0
+
+# Sensory barrage state
+var _barrage_timer: float = 0.0
+var _barrage_pending: Array[HTTPRequest] = []
 
 
 func _ready() -> void:
@@ -65,7 +70,8 @@ func _physics_process(delta: float) -> void:
 	if not _should_run_autonomous():
 		return
 	_decision_timer += delta
-	if _decision_timer >= llm_config.decision_interval:
+	var interval: float = _get_phase_interval()
+	if _decision_timer >= interval:
 		_decision_timer = 0.0
 		_send_request("tick", "")
 
@@ -198,7 +204,7 @@ func _build_request_payload(kind: String, chat_message: String) -> Dictionary:
 	return {
 		"model": model,
 		"temperature": _compute_temperature(),
-		"max_tokens": llm_config.max_tokens,
+		"max_tokens": _compute_max_tokens(),
 		"messages": messages,
 	}
 
@@ -283,23 +289,138 @@ func _compute_temperature() -> float:
 		var discomfort: float = clampf(_profile.discomfort_level / 100.0, 0.0, 1.0)
 		temp += comfort * llm_config.temperature_pleasure_scale
 		temp += discomfort * llm_config.temperature_pain_scale
-	if _spike_active:
-		temp = randf_range(llm_config.pleasure_spike_min, llm_config.pleasure_spike_max)
+	match _spike_phase:
+		SpikePhase.BUILDUP:
+			temp = llm_config.spike_buildup_temp
+		SpikePhase.PEAK:
+			temp = llm_config.spike_peak_temp
+		SpikePhase.AFTERGLOW:
+			temp = llm_config.spike_afterglow_temp
+		SpikePhase.REFRACTORY:
+			temp *= llm_config.spike_refractory_temp_mult
 	return clampf(temp, llm_config.temperature_min, llm_config.temperature_max)
 
 
+func _get_phase_interval() -> float:
+	match _spike_phase:
+		SpikePhase.BUILDUP:
+			return llm_config.spike_buildup_interval
+		SpikePhase.PEAK:
+			return llm_config.spike_peak_interval
+		SpikePhase.AFTERGLOW:
+			return llm_config.spike_afterglow_interval
+	return llm_config.decision_interval
+
+
+func _compute_max_tokens() -> int:
+	match _spike_phase:
+		SpikePhase.BUILDUP:
+			return llm_config.spike_buildup_max_tokens
+		SpikePhase.PEAK:
+			return llm_config.spike_peak_max_tokens
+		SpikePhase.AFTERGLOW:
+			return llm_config.spike_afterglow_max_tokens
+	return llm_config.max_tokens
+
+
 func _update_spike_state() -> void:
-	if _profile == null:
+	if _profile == null or llm_config == null:
 		return
+	var delta: float = get_physics_process_delta_time()
 	var now: float = Time.get_ticks_msec() / 1000.0
-	if _spike_active and now >= _spike_end_time:
-		_spike_active = false
-		_spike_cooldown_until = now + llm_config.pleasure_spike_cooldown
-		add_memory_note("Pleasure peaked and control slipped for a moment.")
-	if not _spike_active and now >= _spike_cooldown_until:
-		if _profile.comfort_level >= llm_config.pleasure_spike_threshold:
-			_spike_active = true
-			_spike_end_time = now + llm_config.pleasure_spike_duration
+
+	match _spike_phase:
+		SpikePhase.NONE:
+			if now >= _spike_cooldown_until:
+				if _profile.comfort_level >= llm_config.pleasure_spike_threshold:
+					_spike_phase = SpikePhase.BUILDUP
+					_spike_phase_timer = 0.0
+		SpikePhase.BUILDUP:
+			_spike_phase_timer += delta
+			if _spike_phase_timer >= llm_config.spike_buildup_duration:
+				_spike_phase = SpikePhase.PEAK
+				_spike_phase_timer = 0.0
+				_barrage_timer = 0.0
+		SpikePhase.PEAK:
+			_spike_phase_timer += delta
+			_barrage_timer += delta
+			# Sensory barrage: rapid-fire micro-requests
+			if _barrage_timer >= llm_config.barrage_fire_interval:
+				_barrage_timer = 0.0
+				_fire_barrage()
+			if _spike_phase_timer >= llm_config.spike_peak_duration:
+				_spike_phase = SpikePhase.AFTERGLOW
+				_spike_phase_timer = 0.0
+				add_memory_note("Pleasure peaked and control slipped for a moment.")
+		SpikePhase.AFTERGLOW:
+			_spike_phase_timer += delta
+			if _spike_phase_timer >= llm_config.spike_afterglow_duration:
+				_spike_phase = SpikePhase.REFRACTORY
+				_spike_phase_timer = 0.0
+		SpikePhase.REFRACTORY:
+			_spike_phase_timer += delta
+			if _spike_phase_timer >= llm_config.spike_refractory_duration:
+				_spike_phase = SpikePhase.NONE
+				_spike_cooldown_until = now + llm_config.pleasure_spike_cooldown
+
+
+func _fire_barrage() -> void:
+	# Cancel oldest if over survivor limit
+	while _barrage_pending.size() >= llm_config.barrage_max_survivors:
+		var oldest: HTTPRequest = _barrage_pending.pop_front()
+		if oldest != null and is_instance_valid(oldest):
+			oldest.cancel_request()
+			oldest.queue_free()
+	var barrage_http: HTTPRequest = HTTPRequest.new()
+	add_child(barrage_http)
+	barrage_http.timeout = llm_config.request_timeout_sec
+	barrage_http.request_completed.connect(
+		func(result: int, code: int, _h: PackedStringArray, body: PackedByteArray) -> void:
+			_barrage_pending.erase(barrage_http)
+			barrage_http.queue_free()
+			if result != OK or code < 200 or code >= 300:
+				return
+			var text: String = body.get_string_from_utf8()
+			var raw: String = _extract_raw_content(text)
+			if raw != "":
+				llm_reply.emit(raw, "", "")
+	)
+	_barrage_pending.append(barrage_http)
+	_send_barrage_request(barrage_http)
+
+
+func _send_barrage_request(http: HTTPRequest) -> void:
+	var url: String = NETWORK_CONFIG.get_llm_url() + "/v1/chat/completions"
+	var payload: Dictionary = {
+		"model": model_name,
+		"temperature": llm_config.spike_peak_temp,
+		"max_tokens": llm_config.spike_peak_max_tokens,
+		"messages": [
+			{"role": "system", "content": "You are mid-orgasm. Output ONLY a raw visceral fragment — a gasp, moan, broken word, or body sensation. No JSON. No punctuation rules. Pure sensation."},
+			{"role": "user", "content": "orgasm fragment"}
+		],
+	}
+	var body: String = JSON.stringify(payload)
+	var headers: PackedStringArray = ["Content-Type: application/json"]
+	http.request(url, headers, HTTPClient.METHOD_POST, body)
+
+
+func _extract_raw_content(response_text: String) -> String:
+	var parsed: JSON = JSON.new()
+	if parsed.parse(response_text) != OK:
+		return response_text.strip_edges()
+	var data: Variant = parsed.data
+	if data is Dictionary:
+		var dict: Dictionary = data as Dictionary
+		if dict.has("choices"):
+			var choices: Array = dict["choices"] as Array
+			if not choices.is_empty():
+				var choice: Dictionary = choices[0] as Dictionary
+				if choice.has("message") and choice["message"] is Dictionary:
+					return (choice["message"] as Dictionary).get("content", "") as String
+				if choice.has("text"):
+					return choice.get("text", "") as String
+	return response_text.strip_edges()
 
 
 func _on_request_completed(result: int, response_code: int,
