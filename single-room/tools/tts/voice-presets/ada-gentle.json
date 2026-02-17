@@ -1,0 +1,12 @@
+{
+  "name": "Ada (Gentle)",
+  "voice_a": "af_bella",
+  "voice_b": "af_sky",
+  "blend": 0.30,
+  "speed": 0.95,
+  "mood_variants": {
+    "gentle": { "speed": 0.85, "blend_bias": -0.10 },
+    "aggressive": { "speed": 1.15, "blend_bias": 0.15 },
+    "breathless": { "speed": 1.30, "blend_bias": 0.05 }
+  }
+}

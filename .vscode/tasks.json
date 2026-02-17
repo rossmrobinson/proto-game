@@ -217,6 +217,26 @@
         "${workspaceFolder}/single-room/logs/model-builder-ada-rig-dump.json"
       ],
       "problemMatcher": []
+    },
+    {
+      "label": "Voice Builder: Start",
+      "type": "shell",
+      "command": "${workspaceFolder}/single-room/tools/tts/.venv/Scripts/python.exe",
+      "args": [
+        "${workspaceFolder}/single-room/tools/tts/voice-builder-server.py"
+      ],
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Voice Builder: Health",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-Command",
+        "Invoke-RestMethod http://127.0.0.1:8790/health"
+      ],
+      "problemMatcher": []
     }
   ]
 }

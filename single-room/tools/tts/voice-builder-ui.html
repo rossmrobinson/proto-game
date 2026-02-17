@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voice Builder — Kokoro TTS</title>
+<style>
+  :root {
+    --bg: #1e1e2e;
+    --surface: #282840;
+    --surface2: #313152;
+    --border: #44446a;
+    --text: #e0e0f0;
+    --text-dim: #8888aa;
+    --accent: #7c6ff7;
+    --accent-hover: #9488ff;
+    --danger: #e05577;
+    --success: #44cc88;
+    --warning: #e0aa44;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 20px;
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 4px; }
+  h2 { font-size: 1.1rem; color: var(--accent); margin: 16px 0 8px; }
+  h3 { font-size: 0.95rem; color: var(--text-dim); margin: 12px 0 6px; }
+
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .top-bar .status { font-size: 0.8rem; color: var(--text-dim); }
+  .top-bar .status.ok { color: var(--success); }
+  .top-bar .status.err { color: var(--danger); }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+
+  label {
+    display: block;
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+    margin-top: 10px;
+  }
+  label:first-child { margin-top: 0; }
+
+  select, input[type="text"], input[type="number"], textarea {
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 0.9rem;
+    outline: none;
+  }
+  select:focus, input:focus, textarea:focus {
+    border-color: var(--accent);
+  }
+  textarea { resize: vertical; min-height: 60px; font-family: inherit; }
+
+  input[type="range"] {
+    width: 100%;
+    margin: 4px 0;
+    accent-color: var(--accent);
+  }
+
+  .range-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .range-row input[type="range"] { flex: 1; }
+  .range-val {
+    min-width: 42px;
+    text-align: right;
+    font-size: 0.85rem;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .btn-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+
+  button {
+    padding: 8px 16px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  button:hover { background: var(--border); border-color: var(--accent); }
+
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+  .btn-primary:hover { background: var(--accent-hover); }
+
+  .btn-danger { border-color: var(--danger); color: var(--danger); }
+  .btn-danger:hover { background: var(--danger); color: #fff; }
+
+  .btn-sm { padding: 5px 10px; font-size: 0.78rem; }
+
+  .mood-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .mood-chip {
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    text-align: center;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    transition: all 0.15s;
+  }
+  .mood-chip:hover { border-color: var(--accent); }
+  .mood-chip.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+  .mood-desc {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-top: 4px;
+    min-height: 18px;
+  }
+
+  .preset-list {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 8px;
+  }
+  .preset-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .preset-item:hover { background: var(--surface2); }
+  .preset-item.active { background: var(--accent); color: #fff; }
+
+  .audio-player { margin-top: 12px; width: 100%; }
+  audio { width: 100%; margin-top: 6px; border-radius: 4px; }
+
+  .log-area {
+    max-height: 250px;
+    overflow-y: auto;
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+    font-size: 0.78rem;
+    padding: 10px;
+    background: #0e0e1a;
+    border-radius: 4px;
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+  .log-ok { color: var(--success); }
+  .log-err { color: var(--danger); }
+  .log-info { color: var(--text-dim); }
+  .log-warn { color: var(--warning); }
+
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .hidden { display: none !important; }
+
+  .cat-mood-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .cat-mood-table th, .cat-mood-table td {
+    padding: 4px 8px;
+    text-align: left;
+    font-size: 0.82rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .cat-mood-table th { color: var(--text-dim); font-weight: normal; }
+  .cat-mood-table select { width: auto; padding: 4px 6px; font-size: 0.8rem; }
+
+  .full-width { grid-column: 1 / -1; }
+
+  .progress-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 3px;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: width 0.3s;
+    width: 0%;
+  }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div>
+    <h1>Voice Builder</h1>
+    <span style="font-size: 0.82rem; color: var(--text-dim);">Kokoro TTS — Design, blend, and generate NPC voices</span>
+  </div>
+  <span id="connStatus" class="status">Connecting...</span>
+</div>
+
+<div class="layout">
+  <!-- LEFT COLUMN: Voice Design -->
+  <div>
+    <!-- Preset Management -->
+    <div class="card">
+      <h2>Presets</h2>
+      <div class="btn-row">
+        <button onclick="newPreset()">New</button>
+        <button onclick="showSaveDialog()" class="btn-primary">Save</button>
+        <button onclick="refreshPresets()">Refresh</button>
+      </div>
+      <div id="saveDialog" class="hidden" style="margin-top:10px;">
+        <label>Preset Name</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="presetNameInput" placeholder="e.g. Ada Gentle">
+          <button onclick="savePreset()" class="btn-primary btn-sm">Save</button>
+          <button onclick="hideSaveDialog()" class="btn-sm">Cancel</button>
+        </div>
+      </div>
+      <div id="presetList" class="preset-list"></div>
+    </div>
+
+    <!-- Voice Selection -->
+    <div class="card">
+      <h2>Voice Blend</h2>
+
+      <label>Voice A (Primary)</label>
+      <select id="voiceA"><option value="">Loading...</option></select>
+
+      <label>Voice B (Secondary)</label>
+      <select id="voiceB"><option value="">(none — single voice)</option></select>
+
+      <label>A / B Blend</label>
+      <div class="range-row">
+        <span style="font-size:0.75rem;">A</span>
+        <input type="range" id="blend" min="0" max="1" step="0.01" value="0">
+        <span style="font-size:0.75rem;">B</span>
+        <span class="range-val" id="blendVal">0.00</span>
+      </div>
+
+      <label>Speed</label>
+      <div class="range-row">
+        <input type="range" id="speed" min="0.5" max="2.0" step="0.05" value="1.0">
+        <span class="range-val" id="speedVal">1.00</span>
+      </div>
+    </div>
+
+    <!-- Mood Variants -->
+    <div class="card">
+      <h2>Mood / Tone</h2>
+      <div class="mood-grid" id="moodGrid"></div>
+      <div class="mood-desc" id="moodDesc">Select a mood to preview its modifiers</div>
+    </div>
+  </div>
+
+  <!-- RIGHT COLUMN: Preview + Batch -->
+  <div>
+    <!-- Preview -->
+    <div class="card">
+      <h2>Preview</h2>
+      <label>Test Prompt</label>
+      <textarea id="previewText" rows="3" placeholder="Type something to preview the voice...">Hello, this is a voice test. How do I sound?</textarea>
+      <div class="btn-row">
+        <button onclick="doPreview()" class="btn-primary" id="previewBtn">
+          Play Preview
+        </button>
+        <button onclick="doPreviewAllMoods()" id="previewAllBtn">
+          Preview All Moods
+        </button>
+      </div>
+      <div class="audio-player">
+        <div id="previewStatus" style="font-size:0.8rem;color:var(--text-dim);margin-top:6px;"></div>
+        <audio id="audioPlayer" controls class="hidden"></audio>
+      </div>
+    </div>
+
+    <!-- Batch Generation -->
+    <div class="card">
+      <h2>Batch Generate</h2>
+      <label>NPC Name</label>
+      <input type="text" id="npcName" placeholder="e.g. Ada" value="NPC_Custom">
+
+      <label>Category → Mood Mapping</label>
+      <div style="max-height:250px;overflow-y:auto;">
+        <table class="cat-mood-table" id="catMoodTable">
+          <thead><tr><th>Category</th><th>Mood</th></tr></thead>
+          <tbody id="catMoodBody"><tr><td colspan="2" style="color:var(--text-dim);">Loading categories...</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="btn-row" style="margin-top:12px;">
+        <button onclick="doBatchGenerate()" class="btn-primary" id="batchBtn">
+          Generate All Lines
+        </button>
+        <label style="display:inline-flex;align-items:center;gap:4px;margin:0;font-size:0.82rem;">
+          <input type="checkbox" id="forceRegen"> Force regenerate
+        </label>
+      </div>
+      <div class="progress-bar hidden" id="batchProgress">
+        <div class="progress-fill" id="batchProgressFill"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FULL-WIDTH LOG -->
+  <div class="card full-width">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="margin:0;">Log</h2>
+      <button onclick="clearLog()" class="btn-sm">Clear</button>
+    </div>
+    <div class="log-area" id="logArea"></div>
+  </div>
+</div>
+
+<script>
+const API = '';  // same origin
+let voices = [];
+let moods = {};
+let currentMood = 'neutral';
+let categories = {};
+let currentPresetName = '';
+
+// ── Init ─────────────────────────────────────────────────────────────────
+
+async function init() {
+  await checkHealth();
+  await loadVoices();
+  await loadMoods();
+  await loadCategories();
+  await refreshPresets();
+  setupRangeListeners();
+  log('Ready.', 'info');
+}
+
+async function checkHealth() {
+  try {
+    const r = await fetch(`${API}/health`);
+    if (r.ok) {
+      document.getElementById('connStatus').textContent = 'Connected';
+      document.getElementById('connStatus').className = 'status ok';
+    }
+  } catch {
+    document.getElementById('connStatus').textContent = 'Disconnected';
+    document.getElementById('connStatus').className = 'status err';
+  }
+}
+
+async function loadVoices() {
+  try {
+    const r = await fetch(`${API}/api/voices`);
+    const data = await r.json();
+    voices = data.voices || [];
+    populateVoiceSelects();
+    log(`Loaded ${voices.length} voices`, 'ok');
+  } catch (e) {
+    log(`Failed to load voices: ${e.message}`, 'err');
+  }
+}
+
+function populateVoiceSelects() {
+  const selA = document.getElementById('voiceA');
+  const selB = document.getElementById('voiceB');
+  selA.innerHTML = '';
+  selB.innerHTML = '<option value="">(none — single voice)</option>';
+  for (const v of voices) {
+    selA.innerHTML += `<option value="${v}">${v}</option>`;
+    selB.innerHTML += `<option value="${v}">${v}</option>`;
+  }
+  // Default to af_sky if available
+  if (voices.includes('af_sky')) selA.value = 'af_sky';
+  else if (voices.length > 0) selA.value = voices[0];
+}
+
+async function loadMoods() {
+  try {
+    const r = await fetch(`${API}/api/moods`);
+    const data = await r.json();
+    moods = data.moods || {};
+    renderMoodGrid();
+  } catch (e) {
+    log(`Failed to load moods: ${e.message}`, 'err');
+  }
+}
+
+function renderMoodGrid() {
+  const grid = document.getElementById('moodGrid');
+  grid.innerHTML = '';
+  for (const [name, info] of Object.entries(moods)) {
+    const chip = document.createElement('div');
+    chip.className = 'mood-chip' + (name === currentMood ? ' active' : '');
+    chip.textContent = name;
+    chip.onclick = () => selectMood(name);
+    grid.appendChild(chip);
+  }
+  updateMoodDesc();
+}
+
+function selectMood(name) {
+  currentMood = name;
+  document.querySelectorAll('.mood-chip').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.mood-chip').forEach(c => {
+    if (c.textContent === name) c.classList.add('active');
+  });
+  updateMoodDesc();
+}
+
+function updateMoodDesc() {
+  const m = moods[currentMood];
+  const desc = document.getElementById('moodDesc');
+  if (m) {
+    desc.textContent = `${m.description} — speed ×${m.speed.toFixed(2)}, blend bias ${m.blend_bias >= 0 ? '+' : ''}${m.blend_bias.toFixed(2)}`;
+  } else {
+    desc.textContent = '';
+  }
+}
+
+async function loadCategories() {
+  try {
+    const r = await fetch(`${API}/api/voice-lines`);
+    const data = await r.json();
+    categories = data.categories || {};
+    renderCatMoodTable();
+    log(`Loaded ${Object.keys(categories).length} voice line categories`, 'ok');
+  } catch (e) {
+    log(`Failed to load categories: ${e.message}`, 'err');
+  }
+}
+
+function renderCatMoodTable() {
+  const tbody = document.getElementById('catMoodBody');
+  tbody.innerHTML = '';
+  const moodNames = Object.keys(moods);
+
+  // Auto-assign default moods based on category name
+  const moodHints = {
+    'casual': 'neutral', 'distress': 'aggressive', 'flirting': 'flirty',
+    'offering oral': 'flirty', 'asking for oral': 'assertive',
+    'asking to receive anal': 'assertive', 'asking to give anal': 'assertive',
+    'asking for vaginal': 'assertive', 'vaginal + anal': 'aggressive',
+    'gangbang': 'aggressive', 'ejaculation': 'breathless',
+    'asking to be choked': 'breathless', 'asking to choke': 'assertive',
+    'expressing pleasure': 'breathless', 'expressing orgasm': 'breathless',
+    'afterglow': 'gentle', 'tender': 'gentle', 'whisper': 'whisper',
+    'gentle': 'gentle', 'speed': 'assertive', 'force': 'aggressive',
+    'depth': 'assertive',
+  };
+
+  for (const [cat, lines] of Object.entries(categories)) {
+    const tr = document.createElement('tr');
+    const tdCat = document.createElement('td');
+    tdCat.textContent = `${cat} (${lines.length})`;
+    tr.appendChild(tdCat);
+
+    const tdMood = document.createElement('td');
+    const sel = document.createElement('select');
+    sel.dataset.category = cat;
+    for (const m of moodNames) {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      sel.appendChild(opt);
+    }
+    // Auto-assign
+    const lower = cat.toLowerCase();
+    for (const [hint, mood] of Object.entries(moodHints)) {
+      if (lower.includes(hint)) { sel.value = mood; break; }
+    }
+    tdMood.appendChild(sel);
+    tr.appendChild(tdMood);
+    tbody.appendChild(tr);
+  }
+}
+
+function setupRangeListeners() {
+  const blend = document.getElementById('blend');
+  const speed = document.getElementById('speed');
+  blend.addEventListener('input', () => {
+    document.getElementById('blendVal').textContent = parseFloat(blend.value).toFixed(2);
+  });
+  speed.addEventListener('input', () => {
+    document.getElementById('speedVal').textContent = parseFloat(speed.value).toFixed(2);
+  });
+}
+
+// ── Presets ───────────────────────────────────────────────────────────────
+
+function newPreset() {
+  currentPresetName = '';
+  document.getElementById('voiceA').selectedIndex = 0;
+  document.getElementById('voiceB').selectedIndex = 0;
+  document.getElementById('blend').value = 0;
+  document.getElementById('blendVal').textContent = '0.00';
+  document.getElementById('speed').value = 1.0;
+  document.getElementById('speedVal').textContent = '1.00';
+  selectMood('neutral');
+  document.querySelectorAll('.preset-item').forEach(p => p.classList.remove('active'));
+  log('New preset — settings reset', 'info');
+}
+
+function showSaveDialog() {
+  document.getElementById('saveDialog').classList.remove('hidden');
+  const input = document.getElementById('presetNameInput');
+  input.value = currentPresetName || '';
+  input.focus();
+}
+
+function hideSaveDialog() {
+  document.getElementById('saveDialog').classList.add('hidden');
+}
+
+async function savePreset() {
+  const name = document.getElementById('presetNameInput').value.trim();
+  if (!name) return;
+  const body = {
+    name,
+    voice_a: document.getElementById('voiceA').value,
+    voice_b: document.getElementById('voiceB').value,
+    blend: parseFloat(document.getElementById('blend').value),
+    speed: parseFloat(document.getElementById('speed').value),
+    mood_variants: {},
+  };
+  try {
+    const r = await fetch(`${API}/api/presets/save`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    currentPresetName = name;
+    hideSaveDialog();
+    log(`Saved preset: ${data.saved}`, 'ok');
+    await refreshPresets();
+  } catch (e) {
+    log(`Save failed: ${e.message}`, 'err');
+  }
+}
+
+async function refreshPresets() {
+  try {
+    const r = await fetch(`${API}/api/presets`);
+    const data = await r.json();
+    renderPresetList(data.presets || []);
+  } catch (e) {
+    log(`Failed to load presets: ${e.message}`, 'err');
+  }
+}
+
+function renderPresetList(presets) {
+  const list = document.getElementById('presetList');
+  list.innerHTML = '';
+  if (presets.length === 0) {
+    list.innerHTML = '<div style="color:var(--text-dim);font-size:0.82rem;padding:8px;">No presets saved yet</div>';
+    return;
+  }
+  for (const p of presets) {
+    const item = document.createElement('div');
+    item.className = 'preset-item' + (p.name === currentPresetName ? ' active' : '');
+    const label = document.createElement('span');
+    label.textContent = `${p.name} — ${p.voice_a}${p.voice_b ? ' + ' + p.voice_b : ''}`;
+    item.appendChild(label);
+
+    const btns = document.createElement('div');
+    btns.style.display = 'flex';
+    btns.style.gap = '4px';
+
+    const loadBtn = document.createElement('button');
+    loadBtn.className = 'btn-sm';
+    loadBtn.textContent = 'Load';
+    loadBtn.onclick = (e) => { e.stopPropagation(); loadPreset(p.filename); };
+    btns.appendChild(loadBtn);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn-sm btn-danger';
+    delBtn.textContent = '✕';
+    delBtn.onclick = (e) => { e.stopPropagation(); deletePreset(p.filename); };
+    btns.appendChild(delBtn);
+
+    item.appendChild(btns);
+    list.appendChild(item);
+  }
+}
+
+async function loadPreset(filename) {
+  try {
+    const r = await fetch(`${API}/api/presets/${filename}`);
+    const p = await r.json();
+    document.getElementById('voiceA').value = p.voice_a || '';
+    document.getElementById('voiceB').value = p.voice_b || '';
+    document.getElementById('blend').value = p.blend || 0;
+    document.getElementById('blendVal').textContent = (p.blend || 0).toFixed(2);
+    document.getElementById('speed').value = p.speed || 1.0;
+    document.getElementById('speedVal').textContent = (p.speed || 1.0).toFixed(2);
+    currentPresetName = p.name || filename;
+    log(`Loaded preset: ${p.name}`, 'ok');
+    await refreshPresets();
+  } catch (e) {
+    log(`Load failed: ${e.message}`, 'err');
+  }
+}
+
+async function deletePreset(filename) {
+  try {
+    await fetch(`${API}/api/presets/${filename}`, { method: 'DELETE' });
+    log(`Deleted preset: ${filename}`, 'warn');
+    await refreshPresets();
+  } catch (e) {
+    log(`Delete failed: ${e.message}`, 'err');
+  }
+}
+
+// ── Preview ──────────────────────────────────────────────────────────────
+
+async function doPreview() {
+  const text = document.getElementById('previewText').value.trim();
+  if (!text) return;
+  const btn = document.getElementById('previewBtn');
+  const status = document.getElementById('previewStatus');
+  const audio = document.getElementById('audioPlayer');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Generating...';
+  status.textContent = 'Synthesizing...';
+  audio.classList.add('hidden');
+
+  try {
+    const body = {
+      text,
+      voice_a: document.getElementById('voiceA').value,
+      voice_b: document.getElementById('voiceB').value,
+      blend: parseFloat(document.getElementById('blend').value),
+      speed: parseFloat(document.getElementById('speed').value),
+      mood: currentMood,
+    };
+    const r = await fetch(`${API}/api/preview`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const err = await r.json();
+      throw new Error(err.detail || r.statusText);
+    }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    audio.src = url;
+    audio.classList.remove('hidden');
+    audio.play();
+    status.textContent = `Preview: mood=${currentMood}`;
+    log(`Preview generated (mood: ${currentMood})`, 'ok');
+  } catch (e) {
+    status.textContent = `Error: ${e.message}`;
+    log(`Preview failed: ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Play Preview';
+  }
+}
+
+async function doPreviewAllMoods() {
+  const text = document.getElementById('previewText').value.trim();
+  if (!text) return;
+  const btn = document.getElementById('previewAllBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Generating...';
+
+  const moodNames = Object.keys(moods);
+  log(`Previewing all ${moodNames.length} moods...`, 'info');
+
+  for (const mood of moodNames) {
+    try {
+      const body = {
+        text,
+        voice_a: document.getElementById('voiceA').value,
+        voice_b: document.getElementById('voiceB').value,
+        blend: parseFloat(document.getElementById('blend').value),
+        speed: parseFloat(document.getElementById('speed').value),
+        mood,
+      };
+      const r = await fetch(`${API}/api/preview`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = document.getElementById('audioPlayer');
+      audio.src = url;
+      audio.classList.remove('hidden');
+      document.getElementById('previewStatus').textContent = `Playing: ${mood}`;
+      selectMood(mood);
+
+      // Play and wait for it to finish
+      await new Promise((resolve) => {
+        audio.onended = resolve;
+        audio.onerror = resolve;
+        audio.play();
+      });
+      // Small pause between
+      await new Promise(r => setTimeout(r, 400));
+    } catch (e) {
+      log(`Mood "${mood}" failed: ${e.message}`, 'err');
+    }
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Preview All Moods';
+  log('All mood previews complete', 'ok');
+}
+
+// ── Batch ────────────────────────────────────────────────────────────────
+
+async function doBatchGenerate() {
+  const btn = document.getElementById('batchBtn');
+  const progress = document.getElementById('batchProgress');
+  const fill = document.getElementById('batchProgressFill');
+
+  // Build category→mood mapping
+  const catMoods = {};
+  document.querySelectorAll('#catMoodBody select').forEach(sel => {
+    catMoods[sel.dataset.category] = sel.value;
+  });
+
+  const body = {
+    npc_name: document.getElementById('npcName').value.trim() || 'NPC_Custom',
+    voice_a: document.getElementById('voiceA').value,
+    voice_b: document.getElementById('voiceB').value,
+    blend: parseFloat(document.getElementById('blend').value),
+    speed: parseFloat(document.getElementById('speed').value),
+    category_moods: catMoods,
+    force: document.getElementById('forceRegen').checked,
+  };
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Generating...';
+  progress.classList.remove('hidden');
+  fill.style.width = '10%';
+  log(`Batch generating for ${body.npc_name}...`, 'info');
+
+  try {
+    const r = await fetch(`${API}/api/batch-generate`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const err = await r.json();
+      throw new Error(err.detail || r.statusText);
+    }
+    const data = await r.json();
+    fill.style.width = '100%';
+    log(`Batch complete: ${data.generated} generated, ${data.skipped} skipped, ${data.failed} failed (${data.total} total)`, data.failed > 0 ? 'warn' : 'ok');
+
+    if (data.failed > 0) {
+      for (const r of data.results) {
+        if (r.status === 'failed') log(`  FAILED: "${r.line}" — ${r.error}`, 'err');
+      }
+    }
+  } catch (e) {
+    log(`Batch failed: ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Generate All Lines';
+    setTimeout(() => { progress.classList.add('hidden'); fill.style.width = '0%'; }, 2000);
+  }
+}
+
+// ── Log ──────────────────────────────────────────────────────────────────
+
+function log(msg, level = 'info') {
+  const area = document.getElementById('logArea');
+  const ts = new Date().toLocaleTimeString();
+  area.innerHTML += `<div class="log-${level}">[${ts}] ${escapeHtml(msg)}</div>`;
+  area.scrollTop = area.scrollHeight;
+}
+
+function clearLog() {
+  document.getElementById('logArea').innerHTML = '';
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ── Boot ─────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
